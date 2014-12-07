@@ -16,20 +16,58 @@ use Sub::Exporter -setup => {
 };
 
 sub parse_dsx {
-    my ($file_name)         = @_;
-    my $data                = read_file($file_name);
-    my $header_and_job      = split_by_header_and_job($data);
-    my $ref_array_dsrecords = parse_records( $header_and_job->{job} );
-    my @records             = ();
-    for my $rec ( @{$ref_array_dsrecords} ) {
-        my %rich_fields = ();
-        my $big_field   = split_fields_by_new_line($rec);
-        $rich_fields{ $big_field->{Name} . '_' . $big_field->{Identifier} } =
-          $big_field;
-        push @records, \%rich_fields;
-    }
+    my ($file_name)    = @_;
+    my $data           = read_file($file_name);
+    my $header_and_job = split_by_header_and_job($data);
+    my $header_fields  = split_fields_by_new_line( $header_and_job->{header} );
+    my $name_and_body  = get_name_and_body( $header_and_job->{job} );
+    my $ref_array_dsrecords = parse_records( $name_and_body->{job_body} );
+    my $rich_records        = enrich_records($ref_array_dsrecords);
 
-    return \@records;
+  #    my @records             = ();
+  #    for my $rec ( @{$ref_array_dsrecords} ) {
+  #        my %rich_fields = ();
+  #        my $big_field   = split_fields_by_new_line($rec);
+  #        $rich_fields{ $big_field->{Name} . '_' . $big_field->{Identifier} } =
+  #          $big_field;
+  #        push @records, \%rich_fields;
+  #    }
+
+    return $rich_records;
+}
+
+sub enrich_records {
+    my $ref_array_dsrecords = shift;
+    my %richer_record       = ();
+    for my $rec ( @{$ref_array_dsrecords} ) {
+        my ( $identifier, $fields ) = get_identifier_and_field_of_record($rec);
+        $richer_record{$identifier} = $fields;
+    }
+    return \%richer_record;
+}
+
+sub get_identifier_and_field_of_record {
+    my $data = shift;
+    $data =~ /
+(?<record_fields_body1>
+BEGIN[ ]DSRECORD\n\s+
+Identifier[ ]"(?<identifier>\w+)"
+.*?
+)
+(?<dsrecord_body>
+BEGIN[ ]DSSUBRECORD
+.*?
+END[ ]DSSUBRECORD[\n]
+)
+(?<record_fields_bodys2>
+.*?
+END[ ]DSRECORD
+)
+/xsg;
+    my %fields = %+;
+
+    return ( $fields{identifier}, \%fields );
+
 }
 
 sub split_by_subrecords {
@@ -40,11 +78,29 @@ sub split_by_subrecords {
     return \@dssubrecords;
 }
 
+sub get_name_and_body {
+    my $data = shift;
+    $data =~ /
+BEGIN[ ]DSJOB\n\s+
+Identifier[ ]"(?<identifier>\w+)"
+.*?
+(?<job_body>
+BEGIN[ ]DSRECORD
+.*?
+END[ ]DSRECORD[\n]
+)
+END[ ]DSJOB
+/xsg;
+    my %name_and_body = %+;
+
+    return \%name_and_body;
+}
+
 sub split_fields_by_new_line {
     my ($curr_record) = @_;
 
-    #удаляем ненужные begin end
-    $curr_record =~ s/BEGIN[ ]DSSUBRECORD[\n]  (.*?) END[ ]DSSUBRECORD /$1/xsg;
+#удаляем ненужные begin end
+#    $curr_record =~ s/BEGIN[ ]DSSUBRECORD[\n]  (.*?) END[ ]DSSUBRECORD /$1/xsg;
     my @records = split( /\n/, $curr_record );
     my %big_hash = ();
     for my $line (@records) {
