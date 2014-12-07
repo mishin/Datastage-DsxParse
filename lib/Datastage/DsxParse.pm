@@ -5,6 +5,8 @@ use warnings;
 use Data::TreeDumper;
 use File::Slurp qw(write_file read_file);
 
+#use re 'debug';
+
 our $VERSION = "0.01";
 use Sub::Exporter -setup => {
     exports => [
@@ -38,43 +40,80 @@ sub parse_dsx {
 
 sub enrich_records {
     my $ref_array_dsrecords = shift;
-    my %richer_record       = ();
+    my @richer_record       = ();
     for my $rec ( @{$ref_array_dsrecords} ) {
-        my ( $identifier, $fields ) = get_identifier_and_field_of_record($rec);
-        $richer_record{$identifier} = $fields;
+        my $fields = get_identifier_and_field_of_record($rec);
+        push @richer_record, pack_fields($fields);
     }
-    return \%richer_record;
+    return \@richer_record;
 }
 
+sub pack_fields {
+    my $fields      = shift;
+    my %new_fields  = ();
+    my $identtifier = '';
+    if ( defined $fields->{identifier} ) {
+        $new_fields{identifier} = $fields->{identifier};
+        $new_fields{fields} =
+          split_fields_by_new_line(
+            $fields->{record_fields_body1} . $fields->{record_fields_body2} );
+        $new_fields{subrecord_body} =
+          reformat_subrecord( $fields->{subrecord_body} );
+    }
+    elsif ( defined $fields->{identifier2} ) {
+        $new_fields{identifier} = $fields->{identifier2};
+        $new_fields{fields} =
+          split_fields_by_new_line( $fields->{record_fields_body} );
+    }
+    return \%new_fields;
+}
+
+
 sub get_identifier_and_field_of_record {
-    my $data = shift;
-    $data =~ /
+    my $data   = shift;
+    my %fields = ();
+    if (
+        $data =~ /
+(:?BEGIN[ ]DSRECORD\n
 (?<record_fields_body1>
-BEGIN[ ]DSRECORD\n\s+
+.*?
 Identifier[ ]"(?<identifier>\w+)"
+.*?)
+(?<subrecord_body>
+BEGIN[ ]DSSUBRECORD.*  END[ ]DSSUBRECORD)
+     (?<record_fields_body2>.*?)
+END[ ]DSRECORD)
+|
+(:?BEGIN[ ]DSRECORD\n
+(?<record_fields_body>
 .*?
-)
-(?<dsrecord_body>
-BEGIN[ ]DSSUBRECORD
-.*?
-END[ ]DSSUBRECORD[\n]
-)
-(?<record_fields_bodys2>
-.*?
-END[ ]DSRECORD
-)
-/xsg;
-    my %fields = %+;
+Identifier[ ]"(?<identifier2>\w+)"
+.*?)
+END[ ]DSRECORD)
+   /xsg
+      )
+    {
+        %fields = %+;
+    }
+    return ( \%fields );
 
-    return ( $fields{identifier}, \%fields );
+}
 
+sub reformat_subrecord {
+    my $curr_record      = shift;
+    my $ref_dssubrecords = split_by_subrecords($curr_record);
+    my @subrecords       = ();
+    for my $subrec ( @{$ref_dssubrecords} ) {
+        push @subrecords, split_fields_by_new_line($subrec);
+    }
+    return \@subrecords;
 }
 
 sub split_by_subrecords {
     my $curr_record = shift;
     local $/ = '';    # Paragraph mode
     my @dssubrecords = ( $curr_record =~
-          / ( BEGIN[ ]DSSUBRECORD[\n]   .*?  END[ ]DSSUBRECORD ) /xsg );
+          / BEGIN[ ]DSSUBRECORD([\n]   .*?  )END[ ]DSSUBRECORD /xsg );
     return \@dssubrecords;
 }
 
@@ -98,26 +137,39 @@ END[ ]DSJOB
 
 sub split_fields_by_new_line {
     my ($curr_record) = @_;
-
-#удаляем ненужные begin end
-#    $curr_record =~ s/BEGIN[ ]DSSUBRECORD[\n]  (.*?) END[ ]DSSUBRECORD /$1/xsg;
-    my @records = split( /\n/, $curr_record );
-    my %big_hash = ();
-    for my $line (@records) {
-        while ( $line =~ m/(?<name>\w+)[ ]"(?<value>.*?)(?<!\\)"/xsg ) {
-            my $value = '';
-            if ( defined $+{value} ) {
-                $value = clear_from_back_slash( $+{value} );
-            }
-            $big_hash{ $+{name} } = $value;
+    my @big_array = ();
+    
+    while (
+        $curr_record =~ m/
+(?<name>\w+)[ ]"(?<value>.*?)(?<!\\)"|
+((?<name2>\w+)[ ]\Q=+=+=+=\E
+(?<value2>.*?)
+\Q=+=+=+=\E)
+        /xsg
+      )
+    {
+        my %big_hash = ();
+        my ( $value, $name ) = ( '', '' );
+        if ( defined $+{name} ) {
+            $name  = $+{name};
+            $value = $+{value};
         }
+        elsif ( defined $+{name2} ) {
+            $name  = $+{name2};
+            $value = $+{value2};
+        }
+        # $big_hash{$name} = clear_from_back_slash($value);
+        $big_hash{$name} = $value;
+        push @big_array,\%big_hash;
     }
-    return \%big_hash;
+    return \@big_array;
 }
 
 sub clear_from_back_slash {
     my $string = shift;
-    $string =~ s#\\(['"])#$1#g;
+    if ( defined $string ) {
+        $string =~ s#\\(['"])#$1#g;
+    }
     return $string;
 }
 
@@ -143,10 +195,7 @@ END[ ]DSJOB )
  /xsg
       ;
 
-    #    @header_and_job{ 'header', 'job' } = @fields[ 0 .. 1 ];
     %header_and_job = %+;
-
-    #return \@fields;
     return \%header_and_job;
 }
 

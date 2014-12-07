@@ -27,6 +27,8 @@ _doc/
 *.xml
 *.dsx
 *.log
+*.backup
 Datahub/Tools.pm
 Dsx_parse/Tools.pm.refactor
 scripts/dump.html
+scripts/nytprof
