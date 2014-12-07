@@ -13,4 +13,4 @@ my $dsx_structure = parse_dsx($file_name);
 #@parse_dsx=(1,2);
 #debug(1,\@parse_dsx);
 debug( 1, $dsx_structure );
-print DumpTree( $dsx_structure, '$dsx_structure' );
+#print DumpTree( $dsx_structure, '$dsx_structure' );
