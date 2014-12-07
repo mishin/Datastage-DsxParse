@@ -13,10 +13,11 @@ perl_version 5.006;
 tests_recursive('t');
 
 resources (
-   #homepage   => 'http://yourwebsitehere.com',
+   homepage   => 'http://mishin.narod.ru',
    #IRC        => 'irc://irc.perl.org/#Datastage-DsxParse',
    license    => 'http://dev.perl.org/licenses/',
-   #repository => 'git://github.com/Nikolay Mishin/Datastage-DsxParse.git',
+   repository => 'https://github.com/mishin/Datastage-DsxParse.git
+',
    bugtracker => 'http://rt.cpan.org/NoAuth/Bugs.html?Dist=Datastage-DsxParse',
 );
 
