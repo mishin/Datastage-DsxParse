@@ -29,3 +29,4 @@ _doc/
 *.log
 Datahub/Tools.pm
 Dsx_parse/Tools.pm.refactor
+scripts/dump.html
