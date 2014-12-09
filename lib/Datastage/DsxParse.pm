@@ -3,7 +3,13 @@ use 5.010;
 use strict;
 use warnings;
 use Data::TreeDumper;
+use Data::Dumper;
 use File::Slurp qw(write_file read_file);
+use Scalar::Util qw(blessed dualvar isdual readonly refaddr reftype
+  tainted weaken isweak isvstring looks_like_number
+  set_prototype);
+
+#use Data::Walker qw(:direct);
 
 #use re 'debug';
 
@@ -25,17 +31,278 @@ sub parse_dsx {
     my $name_and_body  = get_name_and_body( $header_and_job->{job} );
     my $ref_array_dsrecords = parse_records( $name_and_body->{job_body} );
     my $rich_records        = enrich_records($ref_array_dsrecords);
+    my $orchestrate_code    = get_orchestrate_code($rich_records);
+        my $parsed_dsx = parse_orchestrate_body($orchestrate_code);
 
-  #    my @records             = ();
-  #    for my $rec ( @{$ref_array_dsrecords} ) {
-  #        my %rich_fields = ();
-  #        my $big_field   = split_fields_by_new_line($rec);
-  #        $rich_fields{ $big_field->{Name} . '_' . $big_field->{Identifier} } =
-  #          $big_field;
-  #        push @records, \%rich_fields;
-  #    }
 
-    return $rich_records;
+    return $parsed_dsx ;
+}
+
+
+sub parse_keep_fields {
+    my $body_for_keep_fields = shift;
+    $body_for_keep_fields =~ s/^\s+|\s+$//g;
+
+    #p $body_for_keep_fields;
+    my @fields = split /\s*,\s*/s, $body_for_keep_fields;
+    return \@fields;
+}
+
+sub parse_fields {
+    my $body_for_fields = shift;
+
+    #p $body_for_fields;
+    my @fields = ();
+    my $field  = qr{
+(?<field_name>\w+)
+:
+(?<is_null>not_nullable|nullable)\s
+(?<field_type>.*?)
+=
+\g{field_name}
+;
+}xs;
+    while ($body_for_fields =~ m/$field/g) {
+        my %field_param = ();
+        $field_param{field_name} = $+{field_name};
+        $field_param{is_null}    = $+{is_null};
+        $field_param{field_type} = $+{field_type};
+        push @fields, \%field_param;
+    }
+    return \@fields;
+}
+
+sub parse_in_links {
+    my ($body) = @_;
+    my @links = ();
+
+=pod
+0< [] 'T100:L101.v'
+1< [] 'T10:L11.v'
+=cut
+
+    my $link = qr{\d+
+< (?:\||)
+\s \[
+(?<link_fields>
+.*?
+)
+\]
+\s
+'
+(?:
+(?<link_name>
+(?<trans_name>\w+):
+\w+)
+.v
+|
+\[.*?\]	
+(?<link_name>
+\w+.ds
+)
+)'
+}xs;
+    while ($body =~ m/$link/g) {
+        my %link_param = ();
+        $link_param{link_name}  = $+{link_name};
+        $link_param{link_type}  = $+{link_fields};
+        $link_param{inout_type} = 'input_links';
+
+        # 'input_links'
+        #$link_param{link_type} = $+{link_type};
+        $link_param{trans_name} = $+{trans_name}
+          if defined $+{trans_name};
+        $link_param{is_param} = 'no';
+        if (defined $+{link_fields})
+
+          #if ( length( $link_param{link_type} ) >= 6
+          #&& substr( $link_param{link_type}, 0, 6 ) eq 'modify' )
+        {
+            $link_param{is_param} = 'yes';
+            $link_param{params}   = parse_fields($+{link_fields});
+            $link_param{link_keep_fields} =
+              parse_keep_fields($+{link_keep_fields})
+              if defined $+{link_keep_fields};
+        }
+        push @links, \%link_param;
+    }
+
+    #print "\n\n Debug in_links!!! \n\n";
+    #p $body;
+    #p @links;
+    return \@links;
+}
+
+sub parse_out_links {
+    my ($body) = @_;
+    my @links = ();
+
+=pod
+## General options
+[ident('T108'); jobmon_ident('T108')]
+## Inputs
+0< [] 'T107:L107.v'
+## Outputs
+0> [] 'T108:L108.v'
+1> [] 'T108:L_DBG01.v'
+;
+## General options
+[ident('T199'); jobmon_ident('T199')]
+## Inputs
+0< [] 'LJ108:L109.v'
+## Outputs
+0> [] 'T199:INS.v'
+1> [] 'T199:UPD.v'
+;
+=cut
+
+    my $link = qr{\d+
+(?:<|>)
+(?:\||)
+\s
+\[
+(?<link_type>
+(?:
+modify\s\(
+(?:
+(?<link_fields>
+.*?;|.*?
+)
+)\n
+keep
+(?<link_keep_fields>
+.*?
+)
+;
+.*?
+\)
+)
+|.*?
+)
+\]
+\s
+'
+(?:
+(?<link_name>
+(?<trans_name>\w+):
+\w+)
+.v
+|
+\[.*?\]	
+(?<link_name>
+\w+.ds
+)
+)'
+}xs;
+    while ($body =~ m/$link/g) {
+        my %link_param = ();
+        $link_param{link_name}  = $+{link_name};
+        $link_param{link_type}  = $+{link_fields};
+        $link_param{inout_type} = 'output_links';
+
+        #$link_param{link_type} = $+{link_type};
+        $link_param{trans_name} = $+{trans_name}
+          if defined $+{trans_name};
+        $link_param{is_param} = 'no';
+        if (defined $+{link_fields})
+
+          #if ( length( $link_param{link_type} ) >= 6
+          #&& substr( $link_param{link_type}, 0, 6 ) eq 'modify' )
+        {
+            $link_param{is_param} = 'yes';
+            $link_param{params}   = parse_fields($+{link_fields});
+            $link_param{link_keep_fields} =
+              parse_keep_fields($+{link_keep_fields})
+              if defined $+{link_keep_fields};
+        }
+        push @links, \%link_param;
+    }
+
+    # print "\n\n Debug out_links!!! \n\n";
+    #p $body;
+    #p @links;
+    return \@links;
+}
+
+
+sub parse_stage_body {
+    my ($stage_body) = @_;
+    my %outs;
+    my $inputs_rx  = qr{## Inputs\n(?<inputs_body>.*?)(?:#|^;$)}sm;
+    my $outputs_rx = qr{## Outputs\n(?<outputs_body>.*?)^;$}sm;
+
+=pod
+## General options
+[ident('LKUP101'); jobmon_ident('LKUP101')]
+## Inputs
+0< [] 'T100:L101.v'
+1< [] 'T10:L11.v'
+## Outputs
+=cut
+
+    my ($inputs, $outputs) = ('', '');
+    $outs{in}   = 'no';
+    $outs{out}  = 'no';
+    $outs{body} = $stage_body;
+    if ($stage_body =~ $inputs_rx) {
+        $outs{inputs} = parse_in_links($+{inputs_body});
+        $outs{in}     = 'yes';
+    }
+    if ($stage_body =~ $outputs_rx) {
+        $outs{outputs} = parse_out_links($+{outputs_body});
+        $outs{out}     = 'yes';
+    }
+    return \%outs;
+}
+
+
+sub make_orchestrate_regexp {
+
+    my $ORCHESTRATE_BODY_RX = qr{
+(?<stage_body>
+\#\#\#\#[ ]STAGE:[ ](?<stage_name>\w+)[\n]
+\#\#[ ]Operator[\n]
+(?<operator_name>\w+)[\n]
+.*?
+[\n]
+;
+)
+}sxm;
+    return $ORCHESTRATE_BODY_RX;
+}
+
+sub parse_orchestrate_body {
+    my $data                = shift;
+    my $ORCHESTRATE_BODY_RX = make_orchestrate_regexp();
+    local $/ = '';
+    my @parsed_dsx = ();
+    while ($data =~ m/$ORCHESTRATE_BODY_RX/xsg) {
+        my %stage = ();
+        my $ins   = parse_stage_body($+{stage_body});
+        $stage{ins}           = $ins;
+        $stage{stage_name}    = $+{stage_name};
+        $stage{operator_name} = $+{operator_name};
+        push @parsed_dsx, \%stage;
+    }
+    return \@parsed_dsx;
+}
+
+sub get_orchestrate_code {
+    my $rich_records = shift;
+    my $rec;
+    my $Identifier = 'ROOT';
+    my $seach_node = 'OrchestrateCode';
+
+    my $curr_ref_array;
+
+    for my $rec1 ( @{$rich_records} ) {
+        my $loc_identifier = $rec1->{'fields'}->{'Identifier'};
+        if ( defined $loc_identifier && $loc_identifier eq $Identifier ) {
+            $curr_ref_array = $rec1;
+        }
+    }
+    my $orch_code = $curr_ref_array->{'fields'}->{$seach_node};
+    return $orch_code;
 }
 
 sub enrich_records {
@@ -67,7 +334,6 @@ sub pack_fields {
     }
     return \%new_fields;
 }
-
 
 sub get_identifier_and_field_of_record {
     my $data   = shift;
@@ -137,8 +403,8 @@ END[ ]DSJOB
 
 sub split_fields_by_new_line {
     my ($curr_record) = @_;
-    my @big_array = ();
-    
+    my %fields_and_values = ();
+
     while (
         $curr_record =~ m/
 (?<name>\w+)[ ]"(?<value>.*?)(?<!\\)"|
@@ -148,7 +414,6 @@ sub split_fields_by_new_line {
         /xsg
       )
     {
-        my %big_hash = ();
         my ( $value, $name ) = ( '', '' );
         if ( defined $+{name} ) {
             $name  = $+{name};
@@ -158,11 +423,9 @@ sub split_fields_by_new_line {
             $name  = $+{name2};
             $value = $+{value2};
         }
-        # $big_hash{$name} = clear_from_back_slash($value);
-        $big_hash{$name} = $value;
-        push @big_array,\%big_hash;
+        $fields_and_values{$name} = $value;
     }
-    return \@big_array;
+    return \%fields_and_values;
 }
 
 sub clear_from_back_slash {
