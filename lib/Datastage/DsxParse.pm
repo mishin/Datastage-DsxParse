@@ -8,6 +8,7 @@ use File::Slurp qw(write_file read_file);
 use Scalar::Util qw(blessed dualvar isdual readonly refaddr reftype
   tainted weaken isweak isvstring looks_like_number
   set_prototype);
+use Encode::Locale;
 
 #use Data::Walker qw(:direct);
 
@@ -32,12 +33,364 @@ sub parse_dsx {
     my $ref_array_dsrecords = parse_records( $name_and_body->{job_body} );
     my $rich_records        = enrich_records($ref_array_dsrecords);
     my $orchestrate_code    = get_orchestrate_code($rich_records);
-        my $parsed_dsx = parse_orchestrate_body($orchestrate_code);
+    my $parsed_dsx          = parse_orchestrate_body($orchestrate_code);
+    my $links               = reformat_links($parsed_dsx);
+    my $direction           = 'start';
+    my ($lines) = fill_way_and_links( $links, $direction );    #$parsed_dsx);
+        #calculate_right_way_for_stages($direction, $links, $col, $orig_col, $j,
+        #\%a_few_stages, \%start_stages_name);
 
-
-    return $parsed_dsx ;
+    return $lines;
 }
 
+sub enc_terminal {
+    if (-t) {
+        binmode( STDIN,  ":encoding(console_in)" );
+        binmode( STDOUT, ":encoding(console_out)" );
+        binmode( STDERR, ":encoding(console_out)" );
+    }
+}
+
+#
+# New subroutine "get_next_stage_for_link" extracted - Thu Nov 21 10:27:27 2014.
+#
+sub get_next_stage_for_link {
+    my ( $links, $stage, $direction ) = @_;
+
+    # input_links output_links
+    # @{$stage->{$suffix}}
+    my ( $out_suffix, $in_suffix ) = ( '', '' );
+    if ( $direction eq 'start' ) {
+        $out_suffix = 'output_links';
+        $in_suffix  = 'input_links';
+    }
+    elsif ( $direction eq 'end' ) {
+        $out_suffix = 'input_links';
+        $in_suffix  = 'output_links';
+    }
+
+  #массив стадий, которые идут сразу за нашей
+    my @next_stages = ();
+
+    #    state $i ;    #         = 0;
+    #    say "get_next_stage_for_link" . ++$i;
+
+    #     print DumpTree( $links,           '$links' );
+
+#Выводим все выходные линки из текущей стадии
+    for my $out_link_name ( @{ $stage->{$out_suffix} } ) {
+
+        # say "\nDebug_bug_bug\n\n";
+        # say $out_link_name;
+        #идем по всем стадиям
+        for my $loc_stage ( @{$links} ) {
+
+#ищем входные линки совпадающие с нашим выходным
+            for my $in_link_name ( @{ $loc_stage->{$in_suffix} } ) {
+                if ( $out_link_name eq $in_link_name ) {
+
+# say "\nЛинки совпали, ура!!!\n\n";
+# say "$out_link_name in $stage->{stage_name} eq $in_link_name in $loc_stage->{stage_name}";
+                    push @next_stages, $loc_stage;
+                }
+            }
+        }
+    }
+
+    #считаем число стадий
+    # my $cnt_of_next_stages=0+@next_stages;
+    #возвращаем ссылку на массив стадий
+
+    return \@next_stages;
+}
+
+sub check_for_dataset {
+    my ( $cnt_links, $stage, $links_type ) = @_;
+
+#также, если стейдж типа ds или это источник в виде базы данных 'pxbridge'
+#у которого нет входящих линков для 1-го и выходящих для последнего
+#точки приземления! (Андрей Бабуров)
+
+    my $is_dataset = 'no';
+
+    #кладем
+    if ( $cnt_links == 1
+        && substr( ${ $stage->{$links_type} }[0], -2 ) eq 'ds' )
+    {
+        $is_dataset = 'yes';
+    }
+    return $is_dataset;
+}
+
+sub check_for_started {
+    my ( $cnt_links, $stage, $ref_start_stages_of, $is_dataset ) = @_;
+    return (
+        (
+            exists $ref_start_stages_of->{ $stage->{operator_name} }
+              && $cnt_links == 0
+        )
+          || ( $is_dataset eq 'yes' )
+    );
+
+}
+
+sub reformat_links {
+    my $parsed_dsx = shift;
+
+  #my $link_and_fields = get_parsed_fields_by_link_name('L101', $parsed_fields);
+
+    # print DumpTree( $parsed_dsx,   '$parsed_dsx' );
+    # print DumpTree( $parsed_fields,   '$parsed_fields' );
+    my $char = ':';
+
+    my @only_links            = ();
+    my @only_stages_and_links = ();
+    my %stages_with_types     = ();
+    foreach my $stage ( @{$parsed_dsx} ) {
+        my %only_stages  = ();
+        my @input_links  = ();
+        my @output_links = ();
+        $only_stages{stage_name}    = $stage->{stage_name};
+        $only_stages{operator_name} = $stage->{operator_name};
+        if ( $stage->{ins}->{in} eq 'yes' ) {
+            for my $inputs ( @{ $stage->{ins}->{inputs} } ) {
+                my %in_links = ();
+                $in_links{link_name} = $inputs->{link_name};
+
+                $in_links{is_param}      = 'no';
+                $in_links{trans_name}    = $inputs->{trans_name};
+                $in_links{operator_name} = $stage->{operator_name};
+                $in_links{stage_name}    = $stage->{stage_name};
+                $in_links{inout_type}    = $inputs->{inout_type};
+
+                if ( $inputs->{is_param} eq 'yes' ) {
+                    $in_links{is_param}         = 'yes';
+                    $in_links{params}           = $inputs->{params};
+                    $in_links{link_keep_fields} = $inputs->{link_keep_fields};
+
+                    my $in_link_name = $inputs->{link_name};
+                    my $in_real_link_name =
+                      substr( $in_link_name,
+                        index( $in_link_name, $char ) + 1 );
+
+                }
+                push @only_links,  \%in_links;
+                push @input_links, $inputs->{link_name};
+                $stages_with_types{ $inputs->{link_name} . '_'
+                      . $inputs->{inout_type} } = \%in_links;
+            }
+        }
+        $only_stages{input_links} = \@input_links;
+        if ( $stage->{ins}->{out} eq 'yes' ) {
+            for my $outputs ( @{ $stage->{ins}->{outputs} } ) {
+                my %out_links = ();
+                $out_links{link_name} = $outputs->{link_name};
+
+                $out_links{is_param}      = 'no';
+                $out_links{trans_name}    = $outputs->{trans_name};
+                $out_links{operator_name} = $stage->{operator_name};
+                $out_links{stage_name}    = $stage->{stage_name};
+                $out_links{inout_type}    = $outputs->{inout_type};
+
+                if ( $outputs->{is_param} eq 'yes' ) {
+                    $out_links{is_param}         = 'yes';
+                    $out_links{params}           = $outputs->{params};
+                    $out_links{link_keep_fields} = $outputs->{link_keep_fields};
+
+                    my $out_link_name = $outputs->{link_name};
+                    my $out_real_link_name =
+                      substr( $out_link_name,
+                        index( $out_link_name, $char ) + 1 );
+
+                }
+                push @only_links,   \%out_links;
+                push @output_links, $outputs->{link_name};
+                $stages_with_types{ $outputs->{link_name} . '_'
+                      . $outputs->{inout_type} } = \%out_links;
+            }
+        }
+        $only_stages{output_links} = \@output_links;
+        push @only_stages_and_links, \%only_stages;
+    }
+    my %out_hash = ();
+    $out_hash{only_links}            = \@only_links;
+    $out_hash{only_stages_and_links} = \@only_stages_and_links;
+    $out_hash{stages_with_types}     = \%stages_with_types;
+    my %cnt_links;
+    for (@only_links) {
+        $cnt_links{ $_->{link_name} . '_' . $_->{inout_type} }++;
+    }
+
+    # print DumpTree(\%out_hash, '\%out_hash');
+    return \@only_stages_and_links;
+}
+
+#
+# New subroutine "fill_excel_stages_and_links" extracted - Wed Nov 5 16:12:45 2014.
+#
+
+sub fill_way_and_links {
+    my ( $links, $direction ) = @_;
+
+    # my $links        = $all->{job_pop}->{only_links}->{only_stages_and_links};
+    my @start_stages    = qw/copy pxbridge import/;
+    my %start_stages_of = map { $_ => 1 } @start_stages;
+    my $max             = 0;
+    my $links_type = ( $direction eq 'start' ) ? 'input_links' : 'output_links';
+    my %start_stages_name = ();
+    my %a_few_stages      = ();
+    my $cnt_stages        = 0 + @{$links};
+
+    #    say "number of links: $cnt_stages";
+    #хэш стейджей с объектами
+    my %stages_body;
+    for my $stage ( @{$links} ) {
+        $stages_body{ $stage->{stage_name} } = $stage;
+        my $cnt_links = 0 + @{ $stage->{$links_type} };
+
+        my $is_dataset = check_for_dataset( $cnt_links, $stage, $links_type );
+        my $is_started_links =
+          check_for_started( $cnt_links, $stage, \%start_stages_of,
+            $is_dataset );
+
+        if ($is_started_links) {
+
+         #находим все начальные линки,их имена!!!
+            $a_few_stages{ $stage->{stage_name} }++;
+        }
+        my %link_collection = ();
+        for my $direction ( 'start', 'end' ) {
+            my $assoc_stages =
+              get_next_stage_for_link( $links, $stage, $direction );
+            $link_collection{$direction} = $assoc_stages;
+        }
+        $start_stages_name{ $stage->{stage_name} } = \%link_collection;
+    }
+    my ($lines) =
+      calculate_right_way_for_stages( $direction, $links, \%a_few_stages,
+        \%start_stages_name );
+
+    #my %for_draw = ();
+    # @for_draw{'all', 'orig_col', 'j', 'lines', 'links'} =
+    #($all, $orig_col, $j, $lines, $links);
+
+# @for_draw{'all', 'orig_col', 'j', 'lines', 'links'} =  ($all, $orig_col, $j + $max, $lines, $links);
+
+    # ($max, $col) = draw_way_in_excel(\%for_draw);
+
+    # $j = $j + 4 + $max;
+    return $lines;    #($max, $lines);    #$j;
+}
+
+#
+# New subroutine "calculate_right_way_for_stages" extracted - Mon Dec  1 01:36:32 2014.
+#
+sub calculate_right_way_for_stages {
+    my $direction = shift;
+    my $links     = shift;
+    my $col       = shift;
+
+    my $orig_col              = shift;
+    my $j                     = shift;
+    my $ref_a_few_stages      = shift;
+    my $ref_start_stages_name = shift;
+
+    # print DumpTree(\%start_stages_name, '@$start_stages_name');
+
+    # p %start_stages_name;
+
+    #число стейджей всего:
+    my $cnt_ctages = 0 + @{$links};
+
+    #say "number of stages: $cnt_ctages";
+
+#$cnt_ctages - это максимальное число вертикальных уровней или столбцов!!!
+
+    #строим нашу цепочку без рекурсии!!
+    #
+    enc_terminal();
+    my %lines = ();
+    foreach my $few_stage ( sort keys %{$ref_a_few_stages} ) {
+        $lines{$few_stage}++;
+        my @elements   = ();
+        my @levels     = ();
+        my %in_already = ();
+        for ( my $i = 0 ; $i < $cnt_ctages ; $i++ ) {
+            my %stages_in_level    = ();
+            my %collect_stages     = ();
+            my $ref_collect_stages = \%collect_stages;
+
+            #print "$i\n";
+            if ( $i == 0 ) {
+                $collect_stages{$few_stage} = 1;
+                $in_already{$few_stage}++;
+                push @levels, \%collect_stages;
+
+         #say "Первый элемент: @{[ sort keys %collect_stages ]}\n";
+                my $ref_0_stages =
+                  get_next_stage_in_hash( $few_stage, $ref_start_stages_name,
+                    $direction );
+                push @levels, $ref_0_stages;
+                foreach my $stg ( keys %{$ref_0_stages} ) {
+                    $in_already{$stg}++;
+                }
+
+        #say "Второй элемент: @{[ sort keys %{$ref_0_stages} ]}\n";
+            }
+            elsif ( $i > 1 ) {
+                my $prev_stages = $levels[ $i - 1 ];
+                foreach my $prev_stage ( sort keys %{$prev_stages} ) {
+                    my $ref_stages = get_next_stage_in_hash( $prev_stage,
+                        $ref_start_stages_name, $direction );
+                    $ref_collect_stages =
+                      merge( $ref_collect_stages, $ref_stages );   #$ref_stages;
+
+                }
+                my %hash_for_check = %{$ref_collect_stages};
+
+#проверяем получившийся хэш на стейджи, которые уже были
+                foreach my $stg2 ( keys %hash_for_check ) {
+                    if ( defined $in_already{$stg2} ) {
+                        delete $hash_for_check{$stg2};
+                    }
+
+                }
+
+                $ref_collect_stages = \%hash_for_check;
+                if ( !keys %{$ref_collect_stages} ) {
+                    last;
+                }
+                push @levels, $ref_collect_stages;    #\%collect_stages;
+                foreach my $stg3 ( keys %{$ref_collect_stages} ) {
+                    $in_already{$stg3}++;
+                }
+
+#               say "Третий элемент: @{[ sort keys %{$ref_collect_stages} ]}\n";
+            }
+        }
+        $lines{$few_stage} = \@levels;
+    }
+
+    print DumpTree( \%lines, '$hash_ref_lines and direction: ' . $direction );
+    return ( \%lines );
+}
+
+sub get_next_stage_in_hash {
+    my ( $prev_stage, $ref_start_stages_name, $direction ) = @_;
+
+#enc_terminal();
+#say 'Для начала выясним, что у нас за переменные:';
+#say 'Будем считать, что в хэше несколько стейджей,тогда пройдем по ним всем!!!:';
+#say 'Предыдущий стейдж :' . $prev_stage;
+    my $ref_link_array    = $ref_start_stages_name->{$prev_stage}->{$direction};
+    my %stage_collections = ();
+    for my $link ( @{$ref_link_array} ) {
+
+        #       say $link->{stage_name};
+        $stage_collections{ $link->{stage_name} }++;
+    }
+    return \%stage_collections;
+}
 
 sub parse_keep_fields {
     my $body_for_keep_fields = shift;
@@ -62,7 +415,7 @@ sub parse_fields {
 \g{field_name}
 ;
 }xs;
-    while ($body_for_fields =~ m/$field/g) {
+    while ( $body_for_fields =~ m/$field/g ) {
         my %field_param = ();
         $field_param{field_name} = $+{field_name};
         $field_param{is_null}    = $+{is_null};
@@ -102,7 +455,7 @@ sub parse_in_links {
 )
 )'
 }xs;
-    while ($body =~ m/$link/g) {
+    while ( $body =~ m/$link/g ) {
         my %link_param = ();
         $link_param{link_name}  = $+{link_name};
         $link_param{link_type}  = $+{link_fields};
@@ -113,15 +466,15 @@ sub parse_in_links {
         $link_param{trans_name} = $+{trans_name}
           if defined $+{trans_name};
         $link_param{is_param} = 'no';
-        if (defined $+{link_fields})
+        if ( defined $+{link_fields} )
 
           #if ( length( $link_param{link_type} ) >= 6
           #&& substr( $link_param{link_type}, 0, 6 ) eq 'modify' )
         {
             $link_param{is_param} = 'yes';
-            $link_param{params}   = parse_fields($+{link_fields});
+            $link_param{params}   = parse_fields( $+{link_fields} );
             $link_param{link_keep_fields} =
-              parse_keep_fields($+{link_keep_fields})
+              parse_keep_fields( $+{link_keep_fields} )
               if defined $+{link_keep_fields};
         }
         push @links, \%link_param;
@@ -194,7 +547,7 @@ keep
 )
 )'
 }xs;
-    while ($body =~ m/$link/g) {
+    while ( $body =~ m/$link/g ) {
         my %link_param = ();
         $link_param{link_name}  = $+{link_name};
         $link_param{link_type}  = $+{link_fields};
@@ -204,15 +557,15 @@ keep
         $link_param{trans_name} = $+{trans_name}
           if defined $+{trans_name};
         $link_param{is_param} = 'no';
-        if (defined $+{link_fields})
+        if ( defined $+{link_fields} )
 
           #if ( length( $link_param{link_type} ) >= 6
           #&& substr( $link_param{link_type}, 0, 6 ) eq 'modify' )
         {
             $link_param{is_param} = 'yes';
-            $link_param{params}   = parse_fields($+{link_fields});
+            $link_param{params}   = parse_fields( $+{link_fields} );
             $link_param{link_keep_fields} =
-              parse_keep_fields($+{link_keep_fields})
+              parse_keep_fields( $+{link_keep_fields} )
               if defined $+{link_keep_fields};
         }
         push @links, \%link_param;
@@ -223,7 +576,6 @@ keep
     #p @links;
     return \@links;
 }
-
 
 sub parse_stage_body {
     my ($stage_body) = @_;
@@ -240,21 +592,20 @@ sub parse_stage_body {
 ## Outputs
 =cut
 
-    my ($inputs, $outputs) = ('', '');
+    my ( $inputs, $outputs ) = ( '', '' );
     $outs{in}   = 'no';
     $outs{out}  = 'no';
     $outs{body} = $stage_body;
-    if ($stage_body =~ $inputs_rx) {
-        $outs{inputs} = parse_in_links($+{inputs_body});
+    if ( $stage_body =~ $inputs_rx ) {
+        $outs{inputs} = parse_in_links( $+{inputs_body} );
         $outs{in}     = 'yes';
     }
-    if ($stage_body =~ $outputs_rx) {
-        $outs{outputs} = parse_out_links($+{outputs_body});
+    if ( $stage_body =~ $outputs_rx ) {
+        $outs{outputs} = parse_out_links( $+{outputs_body} );
         $outs{out}     = 'yes';
     }
     return \%outs;
 }
-
 
 sub make_orchestrate_regexp {
 
@@ -276,9 +627,9 @@ sub parse_orchestrate_body {
     my $ORCHESTRATE_BODY_RX = make_orchestrate_regexp();
     local $/ = '';
     my @parsed_dsx = ();
-    while ($data =~ m/$ORCHESTRATE_BODY_RX/xsg) {
+    while ( $data =~ m/$ORCHESTRATE_BODY_RX/xsg ) {
         my %stage = ();
-        my $ins   = parse_stage_body($+{stage_body});
+        my $ins   = parse_stage_body( $+{stage_body} );
         $stage{ins}           = $ins;
         $stage{stage_name}    = $+{stage_name};
         $stage{operator_name} = $+{operator_name};
