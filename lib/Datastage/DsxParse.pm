@@ -35,12 +35,13 @@ sub parse_dsx {
     my $orchestrate_code    = get_orchestrate_code($rich_records);
     my $parsed_dsx          = parse_orchestrate_body($orchestrate_code);
     my $links               = reformat_links($parsed_dsx);
-    my $direction           = 'start';
-    my ($lines) = fill_way_and_links( $links, $direction );    #$parsed_dsx);
+#    my $direction           = 'start';
+  #  my ($lines) = fill_way_and_links( $links, $direction );    #$parsed_dsx);
         #calculate_right_way_for_stages($direction, $links, $col, $orig_col, $j,
         #\%a_few_stages, \%start_stages_name);
-
-    return $lines;
+my %out;
+@out{'parsed_dsx','links'}=($parsed_dsx,$links);
+    return \%out;#$lines;
 }
 
 sub enc_terminal {
@@ -71,17 +72,8 @@ sub get_next_stage_for_link {
 
   #массив стадий, которые идут сразу за нашей
     my @next_stages = ();
-
-    #    state $i ;    #         = 0;
-    #    say "get_next_stage_for_link" . ++$i;
-
-    #     print DumpTree( $links,           '$links' );
-
 #Выводим все выходные линки из текущей стадии
     for my $out_link_name ( @{ $stage->{$out_suffix} } ) {
-
-        # say "\nDebug_bug_bug\n\n";
-        # say $out_link_name;
         #идем по всем стадиям
         for my $loc_stage ( @{$links} ) {
 
