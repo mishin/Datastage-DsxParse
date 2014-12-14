@@ -1,4 +1,7 @@
 use Modern::Perl;
+use lib "/home/mishin/github/Datastage-DsxParse/lib";
+#use FindBin;                 # locate this script
+#use lib "$FindBin::Bin/..";  # use the parent directory
 use Datastage::DsxParse qw(debug parse_dsx);
 use Carp::Always;
 use Data::TreeDumper;
