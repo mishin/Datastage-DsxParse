@@ -13,7 +13,8 @@ use Encode::Locale;
 use Hash::Merge qw( merge );
 use Spreadsheet::WriteExcel;
 use POSIX qw(strftime);
- use File::Basename;
+use File::Basename;
+
 #use Data::Walker qw(:direct);
 
 #use re 'debug';
@@ -32,10 +33,10 @@ sub parse_dsx {
     my ($file_name)    = @_;
     my $data           = read_file($file_name);
     my $header_and_job = split_by_header_and_job($data);
-    
-    my $header_fields  = split_fields_by_new_line( $header_and_job->{header} );
-    my $name_and_body  = get_name_and_body( $header_and_job->{job} );
-    debug( 1, $header_fields);
+
+    my $header_fields = split_fields_by_new_line( $header_and_job->{header} );
+    my $name_and_body = get_name_and_body( $header_and_job->{job} );
+    debug( 1, $header_fields );
     my $ref_array_dsrecords = parse_records( $name_and_body->{job_body} );
     my $rich_records        = enrich_records($ref_array_dsrecords);
     my $orchestrate_code    = get_orchestrate_code($rich_records);
@@ -43,28 +44,21 @@ sub parse_dsx {
     my $links               = reformat_links($parsed_dsx);
     my $direction           = 'end';
     my ($lines) = fill_way_and_links( $links, $direction );
-    
+
     #итак, все рассичтали, можно рисовать в excel
-    make_excel_and_fill_header($file_name,$header_fields);
-    return $header_and_job ;
+    make_excel_and_fill_header( $file_name, $header_fields );
+    return $header_and_job;
 }
 
-sub make_excel_and_fill_header{
-    my ($file_name,$header_fields)=@_;
-          
-            $file_name = basename($file_name,  ".dsx");
-            say $file_name;
-    say $header_fields->{ToolInstanceID} . '_ON_'
-          . $header_fields->{ServerName} . '_'
-          . $file_name
-          . '.xls';
-    
-         # $file_name =~ s{\.[^.]+$}{};
+sub make_excel_and_fill_header {
+    my ( $file_name, $header_fields ) = @_;
+
+    $file_name = basename( $file_name, ".dsx" );
     my $workbook =
-      Spreadsheet::WriteExcel->new($header_fields->{ToolInstanceID} . '_ON_'
+      Spreadsheet::WriteExcel->new( $header_fields->{ToolInstanceID} . '_ON_'
           . $header_fields->{ServerName} . '_'
           . $file_name
-          . '.xls');
+          . '.xls' );
     set_excel_properties($workbook);
 
     # Add some worksheets
@@ -72,21 +66,61 @@ sub make_excel_and_fill_header{
     add_write_handler_autofit($revision_history);    #begin_autofit
     my $ref_formats = set_excel_formats($workbook);
     $revision_history->activate();
-    fill_excel_header($ref_formats, $revision_history, $header_fields);
+    fill_excel_header( $ref_formats, $revision_history, $header_fields );
+
     #my $i = 0;
     #for my $job_pop (@jobs_properties) {
-      #  fill_excel_body($ref_formats, $i, $job_pop, $revision_history,            $workbook);
-        #$i++;
+    fill_excel_body( $ref_formats, $workbook );
+
+    #$i++;
     #}
     $revision_history->activate();
     autofit_columns($revision_history);              #end_autofit
 
-    # Run the autofit after you have finished writing strings to the workbook.    
-    
-    
- }
- 
- ###############################################################################
+    # Run the autofit after you have finished writing strings to the workbook.
+
+}
+
+#
+# New subroutine "fill_excel_body" extracted - Wed Nov 5 09:58:42 2014.
+#
+sub fill_excel_body {
+    my $ref_formats = shift;
+    my $workbook    = shift;
+
+    fill_rev_history( $ref_formats, $workbook );
+
+# my $curr_job_end =     make_curr_job($job_pop, $ref_formats, $workbook, $i, '2');
+# my %job_and_formats_end;
+# @job_and_formats_end{'ref_formats', 'curr_job', 'job_pop'} =
+# ($ref_formats, $curr_job_end, $job_pop);
+# my $lines = fill_excel_stages(\%job_and_formats_end, 'end');
+
+    # my $mapping_sheet =
+    # make_mapping_job(\%job_and_formats_end, $job_pop, $ref_formats,
+    # $workbook, $i, 'mapping', $lines);
+    # autofit_columns($curr_job_end);
+
+    #    autofit_columns($mapping_sheet);
+
+    # dump_in_html(\%job_and_formats_start);
+}
+
+sub fill_rev_history {
+    my ( $ref_formats, $workbook ) = @_;
+    $revision_history->write( 5 + $i, 5, $i,  $ref_formats->{rows_fmt} );
+    $revision_history->write( 5 + $i, 6, "0", $ref_formats->{rows_fmt} );
+    $revision_history->write_url(
+        5 + $i, 7,
+        'internal:' . substr( $job_pop->{JobName}, -28 ) . '_' . $num . '!A2',
+        $ref_formats->{url_format},
+        $job_pop->{JobName}
+    );
+    $revision_history->write( 5 + $i, 8, $job_pop->{JobDesc},
+        $ref_formats->{rows_fmt} );
+}
+
+###############################################################################
 #
 # Functions used for Autofit.
 #
@@ -98,8 +132,8 @@ sub make_excel_and_fill_header{
 sub autofit_columns {
     my $worksheet = shift;
     my $col       = 0;
-    for my $width (@{$worksheet->{__col_widths}}) {
-        $worksheet->set_column($col, $col, $width) if $width;
+    for my $width ( @{ $worksheet->{__col_widths} } ) {
+        $worksheet->set_column( $col, $col, $width ) if $width;
         $col++;
     }
 }
@@ -136,7 +170,7 @@ sub store_string_widths {
     #
     my $old_width    = $worksheet->{__col_widths}->[$col];
     my $string_width = string_width($token);
-    if (not defined $old_width or $string_width > $old_width) {
+    if ( not defined $old_width or $string_width > $old_width ) {
 
         # You may wish to set a minimum column width as follows.
         #return undef if $string_width < 10;
@@ -156,7 +190,6 @@ sub string_width {
 
     #return 1.1 * length $_[0];
 }
-
 
 #
 # New subroutine "set_excel_properties" extracted - Wed Nov 5 09:44:48 2014.
@@ -192,7 +225,7 @@ sub set_excel_formats {
     );
 
     # size => 20,
-    my $rows_fmt = $workbook->add_format(align => 'left', border => 1);
+    my $rows_fmt = $workbook->add_format( align => 'left', border => 1 );
 
     # $rows_fmt->set_text_wrap();
     my $date_fmt = $workbook->add_format(
@@ -214,20 +247,20 @@ sub set_excel_formats {
     $sql_fmt->set_size(8);
     $sql_fmt->set_font('Arial Narrow');
     $sql_fmt->set_align('bottom');
-    $workbook->set_custom_color(40, 141, 180, 226);
+    $workbook->set_custom_color( 40, 141, 180, 226 );
     my $map_fmt = $workbook->add_format(
         bold     => 1,
         border   => 2,
         bg_color => 40,
     );
-    my $acca_color = $workbook->set_custom_color(40, 230, 230, 230)
+    my $acca_color = $workbook->set_custom_color( 40, 230, 230, 230 )
       ;    #light grey used in ACCA template
 
 # $workbook->set_custom_color(40, 230,  230,  230); # light grey used in ACCA template
-    my $light_orange = $workbook->set_custom_color(43, 255, 226, 171);
-    my $ligth_yellow = $workbook->set_custom_color(42, 255, 255, 153);
-    my $light_purple = $workbook->set_custom_color(41, 225, 204, 255);
-    my $light_green  = $workbook->set_custom_color(44, 204, 255, 153);
+    my $light_orange = $workbook->set_custom_color( 43, 255, 226, 171 );
+    my $ligth_yellow = $workbook->set_custom_color( 42, 255, 255, 153 );
+    my $light_purple = $workbook->set_custom_color( 41, 225, 204, 255 );
+    my $light_green  = $workbook->set_custom_color( 44, 204, 255, 153 );
     my $target_field_fmt = $workbook->add_format();
     $target_field_fmt->copy($heading);
 
@@ -236,7 +269,6 @@ sub set_excel_formats {
     $target_field_fmt->set_text_wrap();
 
     # $target_field_fmt->set_align('bottom');
-
 
     # $target_field_fmt->set_align('center');
     $target_field_fmt->set_bg_color($light_green);
@@ -249,23 +281,22 @@ sub set_excel_formats {
     # $source_field_fmt->set_bg_color($ligth_yellow);
 
     my %formats;
-    my $grey_color = $workbook->set_custom_color(45, 128, 128, 128);
+    my $grey_color = $workbook->set_custom_color( 45, 128, 128, 128 );
     my $fm_grey =
-      add_fmt_with_color($workbook, $target_field_fmt, $grey_color);
-    my $purple_color = $workbook->set_custom_color(46, 204, 192, 218);
+      add_fmt_with_color( $workbook, $target_field_fmt, $grey_color );
+    my $purple_color = $workbook->set_custom_color( 46, 204, 192, 218 );
     $formats{fm_purple} =
-      add_fmt_with_color($workbook, $target_field_fmt, $purple_color);
+      add_fmt_with_color( $workbook, $target_field_fmt, $purple_color );
 
-    my $light_blue_color = $workbook->set_custom_color(47, 183, 222, 222);
+    my $light_blue_color = $workbook->set_custom_color( 47, 183, 222, 222 );
     $formats{fm_light_blue} =
-      add_fmt_with_color($workbook, $target_field_fmt, $light_blue_color);
+      add_fmt_with_color( $workbook, $target_field_fmt, $light_blue_color );
 
-    my $green_color = $workbook->set_custom_color(48, 0, 176, 80);
+    my $green_color = $workbook->set_custom_color( 48, 0, 176, 80 );
     $formats{fm_green} =
-      add_fmt_with_color($workbook, $target_field_fmt, $green_color);
+      add_fmt_with_color( $workbook, $target_field_fmt, $green_color );
 
-# $hs_name_frmt->set_bg_color($acca_color);
-
+    # $hs_name_frmt->set_bg_color($acca_color);
 
     @formats{
         'date_fmt', 'heading',          'num_fmt',
@@ -285,7 +316,7 @@ sub set_excel_formats {
 }
 
 sub add_fmt_with_color {
-    my ($workbook, $target_field_fmt, $color) = @_;
+    my ( $workbook, $target_field_fmt, $color ) = @_;
     my $fm = $workbook->add_format();
     $fm->copy($target_field_fmt);
     $fm->set_bg_color($color);
@@ -298,13 +329,13 @@ sub add_fmt_with_color {
 sub add_write_handler_autofit {
     my $sheet = shift;
 ###############################################################################
- #
- # Add a handler to store the width of the longest string written to a column.
- # We use the stored width to simulate an autofit of the column widths.
- #
- # You should do this for every worksheet you want to autofit.
- #
-    $sheet->add_write_handler(qr[\w], \&store_string_widths);
+   #
+   # Add a handler to store the width of the longest string written to a column.
+   # We use the stored width to simulate an autofit of the column widths.
+   #
+   # You should do this for every worksheet you want to autofit.
+   #
+    $sheet->add_write_handler( qr[\w], \&store_string_widths );
 }
 
 #
@@ -315,20 +346,24 @@ sub fill_excel_header {
     my $revision_history = shift;
     my $head_prop        = shift;
     my $date             = strftime "%d.%m.%Y", localtime;
-    $revision_history->write(0, 0, "Date",        $ref_formats->{heading});
-    $revision_history->write(0, 1, "Version",     $ref_formats->{heading});
-    $revision_history->write(0, 2, "Description", $ref_formats->{heading});
-    $revision_history->write(0, 3, "Author",      $ref_formats->{heading});
-    $revision_history->write(1, 0, $date,         $ref_formats->{date_fmt});
-    $revision_history->write(1, 1, "1.0",         $ref_formats->{num_fmt});
+    $revision_history->write( 0, 0, "Date",        $ref_formats->{heading} );
+    $revision_history->write( 0, 1, "Version",     $ref_formats->{heading} );
+    $revision_history->write( 0, 2, "Description", $ref_formats->{heading} );
+    $revision_history->write( 0, 3, "Author",      $ref_formats->{heading} );
+    $revision_history->write( 1, 0, $date,         $ref_formats->{date_fmt} );
+    $revision_history->write( 1, 1, "1.0",         $ref_formats->{num_fmt} );
     $revision_history->write(
         1, 2,
         "Initial version",
         $ref_formats->{rows_fmt}
     );
-    $revision_history->write(1, 3, "Мишин Н.А.", $ref_formats->{rows_fmt});
-    $revision_history->write(0, 5, "Project",    $ref_formats->{heading});
-    $revision_history->write(0, 6, "Server",     $ref_formats->{heading});
+    $revision_history->write(
+        1, 3,
+        "Мишин Н.А.",
+        $ref_formats->{rows_fmt}
+    );
+    $revision_history->write( 0, 5, "Project", $ref_formats->{heading} );
+    $revision_history->write( 0, 6, "Server",  $ref_formats->{heading} );
     $revision_history->write(
         1, 5,
         $head_prop->{ToolInstanceID},
@@ -339,12 +374,11 @@ sub fill_excel_header {
         $head_prop->{ServerName},
         $ref_formats->{rows_fmt}
     );
-    $revision_history->write(4, 5, "Id",          $ref_formats->{heading});
-    $revision_history->write(4, 6, "Parent_id",   $ref_formats->{heading});
-    $revision_history->write(4, 7, "Sequence",    $ref_formats->{heading});
-    $revision_history->write(4, 8, "Description", $ref_formats->{heading});
+    $revision_history->write( 4, 5, "Id",          $ref_formats->{heading} );
+    $revision_history->write( 4, 6, "Parent_id",   $ref_formats->{heading} );
+    $revision_history->write( 4, 7, "Sequence",    $ref_formats->{heading} );
+    $revision_history->write( 4, 8, "Description", $ref_formats->{heading} );
 }
-
 
 sub enc_terminal {
     if (-t) {
