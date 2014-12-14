@@ -36,7 +36,7 @@ sub parse_dsx {
 
     my $header_fields = split_fields_by_new_line( $header_and_job->{header} );
     my $name_and_body = get_name_and_body( $header_and_job->{job} );
-    debug( 1, $header_fields );
+    #debug( 1, $header_fields );
     my $ref_array_dsrecords = parse_records( $name_and_body->{job_body} );
     my $rich_records        = enrich_records($ref_array_dsrecords);
     my $orchestrate_code    = get_orchestrate_code($rich_records);
@@ -46,8 +46,8 @@ sub parse_dsx {
     my ($lines) = fill_way_and_links( $links, $direction );
 
     #итак, все рассичтали, можно рисовать в excel
-    make_excel_and_fill_header( $file_name, $header_fields );
-    return $header_and_job;
+    #make_excel_and_fill_header( $file_name, $header_fields );
+    return $rich_records        ;#$header_and_job;
 }
 
 sub make_excel_and_fill_header {
@@ -107,16 +107,17 @@ sub fill_excel_body {
 }
 
 sub fill_rev_history {
-    my ( $ref_formats, $workbook ) = @_;
-    $revision_history->write( 5 + $i, 5, $i,  $ref_formats->{rows_fmt} );
-    $revision_history->write( 5 + $i, 6, "0", $ref_formats->{rows_fmt} );
+    my ( $ref_formats, $workbook,$job_pop ) = @_;
+my    $revision_history = $workbook->sheets(0);
+    $revision_history->write( 5, 5, 0, $ref_formats->{rows_fmt} );
+    $revision_history->write( 5, 6, 0, $ref_formats->{rows_fmt} );
     $revision_history->write_url(
-        5 + $i, 7,
-        'internal:' . substr( $job_pop->{JobName}, -28 ) . '_' . $num . '!A2',
+        5, 7,
+        'internal:' . substr( $job_pop->{JobName}, -28 ) . '_!A2',
         $ref_formats->{url_format},
         $job_pop->{JobName}
     );
-    $revision_history->write( 5 + $i, 8, $job_pop->{JobDesc},
+    $revision_history->write( 5, 8, $job_pop->{JobDesc},
         $ref_formats->{rows_fmt} );
 }
 
