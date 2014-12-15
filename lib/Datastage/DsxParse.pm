@@ -6,9 +6,10 @@ use warnings;
 use Data::TreeDumper;
 use Data::Dumper;
 use File::Slurp qw(write_file read_file);
-use Scalar::Util qw(blessed dualvar isdual readonly refaddr reftype
-  tainted weaken isweak isvstring looks_like_number
-  set_prototype);
+
+#use Scalar::Util qw(blessed dualvar readonly refaddr reftype
+#  tainted weaken isweak isvstring looks_like_number
+#  set_prototype);
 use Encode::Locale;
 use Hash::Merge qw( merge );
 use Spreadsheet::WriteExcel;
@@ -34,31 +35,45 @@ sub parse_dsx {
     my $data           = read_file($file_name);
     my $header_and_job = split_by_header_and_job($data);
 
-    my $header_fields = split_fields_by_new_line( $header_and_job->{header} );
-    my $name_and_body = get_name_and_body( $header_and_job->{job} );
-    #debug( 1, $header_fields );
-    my $ref_array_dsrecords = parse_records( $name_and_body->{job_body} );
-    my $rich_records        = enrich_records($ref_array_dsrecords);
-    my $orchestrate_code    = get_orchestrate_code($rich_records);
-    my $parsed_dsx          = parse_orchestrate_body($orchestrate_code);
-    my $links               = reformat_links($parsed_dsx);
-    my $direction           = 'end';
-    my ($lines) = fill_way_and_links( $links, $direction );
+    my $header_fields = split_fields_by_new_line($header_and_job->{header});
+    my $name_and_body = get_name_and_body($header_and_job->{job});
 
-    #итак, все рассичтали, можно рисовать в excel
-    #make_excel_and_fill_header( $file_name, $header_fields );
-    return $rich_records        ;#$header_and_job;
+    #debug( 1, $header_fields );
+    my $ref_array_dsrecords = parse_records($name_and_body->{job_body});
+    my $rich_records        = enrich_records($ref_array_dsrecords);
+    my $orchestrate_code =
+      get_orchestrate_code($rich_records, 'OrchestrateCode');
+    my $parsed_dsx = parse_orchestrate_body($orchestrate_code);
+    my $links      = reformat_links($parsed_dsx);
+    my $direction  = 'end';
+    my $lines      = fill_way_and_links($links, $direction);
+
+
+    my %job_prop = ();
+    @job_prop{
+        'header_and_job', 'header_fields', 'rich_records',
+        'parsed_dsx',     'links',         'direction',
+        'lines'
+      }
+      = (
+        $header_and_job, $header_fields, $rich_records, $parsed_dsx, $links,
+        $direction, $lines
+      );
+
+  #итак, все рассичтали, можно рисовать в excel
+    make_excel_and_fill_header($file_name, $header_fields, \%job_prop);
+    return $rich_records;    #$header_and_job;
 }
 
 sub make_excel_and_fill_header {
-    my ( $file_name, $header_fields ) = @_;
+    my ($file_name, $header_fields, $job_prop) = @_;
 
-    $file_name = basename( $file_name, ".dsx" );
+    $file_name = basename($file_name, ".dsx");
     my $workbook =
-      Spreadsheet::WriteExcel->new( $header_fields->{ToolInstanceID} . '_ON_'
+      Spreadsheet::WriteExcel->new($header_fields->{ToolInstanceID} . '_ON_'
           . $header_fields->{ServerName} . '_'
           . $file_name
-          . '.xls' );
+          . '.xls');
     set_excel_properties($workbook);
 
     # Add some worksheets
@@ -66,16 +81,19 @@ sub make_excel_and_fill_header {
     add_write_handler_autofit($revision_history);    #begin_autofit
     my $ref_formats = set_excel_formats($workbook);
     $revision_history->activate();
-    fill_excel_header( $ref_formats, $revision_history, $header_fields );
+    fill_excel_header($ref_formats, $revision_history, $header_fields);
 
     #my $i = 0;
     #for my $job_pop (@jobs_properties) {
-    fill_excel_body( $ref_formats, $workbook );
+    my %param_fields = ();
+    @param_fields{'job_prop', 'ref_formats', 'workbook'} =
+      ($job_prop, $ref_formats, $workbook);
+    fill_excel_body(\%param_fields);
 
     #$i++;
     #}
     $revision_history->activate();
-    autofit_columns($revision_history);              #end_autofit
+    autofit_columns($revision_history);    #end_autofit
 
     # Run the autofit after you have finished writing strings to the workbook.
 
@@ -85,10 +103,11 @@ sub make_excel_and_fill_header {
 # New subroutine "fill_excel_body" extracted - Wed Nov 5 09:58:42 2014.
 #
 sub fill_excel_body {
-    my $ref_formats = shift;
-    my $workbook    = shift;
+    my $param_fields = shift;
 
-    fill_rev_history( $ref_formats, $workbook );
+    # my $workbook    = shift;
+
+    fill_rev_history($param_fields);
 
 # my $curr_job_end =     make_curr_job($job_pop, $ref_formats, $workbook, $i, '2');
 # my %job_and_formats_end;
@@ -96,29 +115,250 @@ sub fill_excel_body {
 # ($ref_formats, $curr_job_end, $job_pop);
 # my $lines = fill_excel_stages(\%job_and_formats_end, 'end');
 
-    # my $mapping_sheet =
-    # make_mapping_job(\%job_and_formats_end, $job_pop, $ref_formats,
-    # $workbook, $i, 'mapping', $lines);
+    my $mapping_sheet = make_mapping_job($param_fields);
+
     # autofit_columns($curr_job_end);
 
-    #    autofit_columns($mapping_sheet);
+    autofit_columns($mapping_sheet);
 
     # dump_in_html(\%job_and_formats_start);
 }
 
+sub get_worksheet_by_name {
+    my ($workbook, $name) = @_;
+    my $worksheet;
+    return $worksheet;
+}
+
+sub make_mapping_job {
+    my ($param_fields) = @_;
+    my $workbook       = $param_fields->{workbook};
+    my $loc_hash_prop  = $param_fields->{job_prop};
+    my $lines          = $param_fields->{job_prop}->{lines};
+    my $ref_formats    = $param_fields->{ref_formats};
+
+    # 'job_prop', 'ref_formats','workbook';
+    # 'mapping', $lines
+    # my ($all, $loc_hash_prop, $ref_formats, $workbook, $i, $name, $lines) =
+    # @_;
+
+    my $job_name = get_orchestrate_code($param_fields->{job_prop}->{rich_records}, 'Name');
+#dd(\%start_stages_for_mapping);
+    my $curr_job = $workbook->add_worksheet(
+        substr($job_name, -20) . '_mapping');
+    $curr_job->activate();
+    add_write_handler_autofit($curr_job);
+    my @deb_array                = ($lines);
+    my %start_stages_for_mapping = ();
+    for my $key (keys %{$lines}) {
+        my @arr = @{$lines->{$key}};
+        print Dumper $arr[0];
+        for my $stage_name (keys %{$arr[0]}) {
+            $start_stages_for_mapping{$stage_name}++;
+        }
+    }
+
+
+    my $ref_fields = get_header_values();
+    for my $field (@{$ref_fields}) {
+        $curr_job->write($field->{coord}, $field->{caption},
+            $ref_formats->{$field->{format}});
+    }
+
+    $curr_job->write(
+        'B4',
+        $loc_hash_prop->{JobName},
+        $ref_formats->{rows_fmt}
+    );
+    $curr_job->write(
+        'B3',
+        $loc_hash_prop->{JobName},
+        $ref_formats->{rows_fmt}
+    );
+
+
+    # $all->{job_pop}->{only_links}->{stages_with_types}
+# input_links
+# TranRestructEndDate:L5
+# Htf13SgLoansRestructHist_Insert
+    my $j   = 3;
+    my $col = 7;
+    my $links =
+      $param_fields->{job_prop}
+      ->{links};    #$all->{job_pop}->{only_links}->{only_stages_and_links};
+    say '19:25';
+    for my $final_stage_for_draw (keys %start_stages_for_mapping) {
+        $curr_job->write('D3', $final_stage_for_draw,
+            $ref_formats->{rows_fmt});
+        say '18:47';
+        my $stage = get_body_of_stage($links, $final_stage_for_draw);
+        print Dumper $stage;
+        my ($max, $col) =
+          fill_excel_inout_links($param_fields, $col, $j, $stage);
+    }
+
+# say "@start_stages_for_mapping";
+
+# my $suffix='end';
+# $stage->{$suffix}
+    # my $fields = get_parsed_fields_from_all($all, $link_name);
+    # if (defined $fields) {
+    # my $g = pexcel_table_fields_property($j + 2, $col, $all, $fields,
+    # $link_name);
+# }
+
+
+    return $curr_job;
+
+}
+
+
+#
+# New subroutine "fill_excel_inout_links" extracted - Thu Nov 20 15:27:27 2014.
+#
+sub fill_excel_inout_links {
+    my ($all, $col, $j, $stage) = @_;
+
+    my ($col_max, $loc_max) = (0, 0, 0);
+    pexcel_head($j + 6, $col, $all, 'stage_name');
+    pexcel_row($j + 6, $col + 1, $all, $stage->{stage_name});
+    pexcel_head($j + 7, $col, $all, 'operator_name');
+    pexcel_row($j + 7, $col + 1, $all, $stage->{operator_name});
+
+    # my @start_stages = ('copy', 'pxbridge');
+    # my %start_stages_of = map { $_ => 1 } @start_stages;
+
+    for my $link (qw/input_links output_links/) {
+
+        # print "\n\n\nDEbug\n\n";
+        # say 0 + @{ $stage->{$link} };
+        # p $link;
+        # p $stage;
+
+        #если число линков больше нуля
+        if (0 + @{$stage->{$link}} > 0) {
+            $loc_max = pexcel_table_links($j + 9, $col, $all, $stage, $link);
+            $col_max = max($col_max, $loc_max);
+
+            # $col = $col + 5;
+            $col = $col + 4;
+        }
+
+        #}
+    }
+    return ($col_max, $col);    #,$j);
+}
+
+sub get_caption_fields {
+    my $caption_fields =
+      'Идентификатор атрибута (таблица.атрибут);A2;fm_grey
+ ;A1;fm_grey
+Вхождение в проект;B1;fm_purple
+Project;B2;fm_purple
+Job;C2;fm_purple
+ ;C1;fm_purple
+ПРИЕМНИК ДАННЫХ;D1;target_field_fmt
+Витрины: BCE 13.4, Magnitude, КРЕМ2, Armoni, СИ: БИС, АБС, ЯДРО;D2;target_field_fmt
+Схема;E2;target_field_fmt
+ ;E1;target_field_fmt
+Таблица;F2;target_field_fmt
+ ;F1;target_field_fmt
+Поле;G2;target_field_fmt
+ ;G1;target_field_fmt
+Тип данных/Длина;H2;target_field_fmt
+ ;H1;target_field_fmt
+Вхождение в ключ;I2;target_field_fmt
+ ;I1;target_field_fmt
+Обязательность;J2;target_field_fmt
+ ;J1;target_field_fmt
+ИСТОЧНИК ДАННЫХ;K1;target_field_fmt
+Витрины : BCE 13.4, Magnitude, КРЕМ2, Armoni (MART_NEW), СИ: БИС, АБС, ЯДРО (DWH);K2;target_field_fmt
+Схема;L2;source_field_fmt
+ ;L1;source_field_fmt
+Таблица;M2;source_field_fmt
+ ;M1;source_field_fmt
+Поле;N2;source_field_fmt
+ ;N1;source_field_fmt
+Тип данных/Длина;O2;source_field_fmt
+ ;O1;source_field_fmt
+Вхождение в ключ;P2;source_field_fmt
+ ;P1;source_field_fmt
+Алгоритм запроса на источник;Q2;fm_grey
+Алгоритм ETL;R2;fm_grey
+Правило связей между полями в источнике (внутренние);S2;fm_grey
+Правило связи между полями в различных источниках (внешние);T2;fm_grey
+Armoni;U2;fm_grey
+BCE Retail;V2;fm_light_blue
+BCE NonR;W2;fm_light_blue
+Magnitude;X2;fm_light_blue
+Krem2;Y2;fm_light_blue
+Отчет/выгрузка;Z2;fm_light_blue
+ID;AA2;fm_green
+PARENT_ID;AB2;fm_green
+MART:BCE 13.4, Magnitude, КРЕМ2, Armoni;AC2;fm_green
+Комментарий;AD2;fm_green';
+
+    return $caption_fields;
+}
+
+sub get_header_values {
+    my $caption_fields = get_caption_fields();
+    my @values;
+    my @source_fields = split(/\n/, $caption_fields);
+
+    # &enc_terminal();
+    # say '22:18';
+    for my $curr_field (@source_fields) {
+        my %fields = ();
+        my @collection = split(/;/, $curr_field);
+
+        # say "$collection[1]";
+        #dd (\@collection);
+        $fields{'caption'} = $collection[0];
+        $fields{'coord'}   = $collection[1];
+        $fields{'format'}  = $collection[2];
+        push @values, \%fields;
+    }
+
+
+    return \@values;
+}
+
+
 sub fill_rev_history {
-    my ( $ref_formats, $workbook,$job_pop ) = @_;
-my    $revision_history = $workbook->sheets(0);
-    $revision_history->write( 5, 5, 0, $ref_formats->{rows_fmt} );
-    $revision_history->write( 5, 6, 0, $ref_formats->{rows_fmt} );
+    my ($param_fields) = @_;
+    my ($ref_formats, $workbook, $job_prop) = (
+        $param_fields->{ref_formats},
+        $param_fields->{workbook},
+        $param_fields->{job_prop}
+    );
+    my $sheet_name = 'Revision_History';
+    my $revision_history;
+    my $rich_records = $job_prop->{rich_records};
+
+    # print Dumper $job_prop->{rich_records};
+    # 'header_and_job', 'header_fields', 'rich_records',
+    # 'parsed_dsx',     'links',         'direction',
+    # 'lines'
+    foreach my $worksheet ($workbook->sheets()) {
+        if ($worksheet->get_name() eq $sheet_name) {
+            $revision_history = $worksheet;
+        }
+    }
+
+    my $job_name = get_orchestrate_code($rich_records, 'Name');
+
+    #print Dumper $workbook;
+    # my $revision_history = $workbook->sheets(0);
+    $revision_history->write(5, 5, 0, $ref_formats->{rows_fmt});
+    $revision_history->write(5, 6, 0, $ref_formats->{rows_fmt});
     $revision_history->write_url(
         5, 7,
-        'internal:' . substr( $job_pop->{JobName}, -28 ) . '_!A2',
-        $ref_formats->{url_format},
-        $job_pop->{JobName}
+        'internal:' .  substr($job_name, -20) . '_mapping' . '!A2',
+        $ref_formats->{url_format}, $job_name
     );
-    $revision_history->write( 5, 8, $job_pop->{JobDesc},
-        $ref_formats->{rows_fmt} );
+    $revision_history->write(5, 8, $job_prop->{JobDesc},
+        $ref_formats->{rows_fmt});
 }
 
 ###############################################################################
@@ -133,8 +373,8 @@ my    $revision_history = $workbook->sheets(0);
 sub autofit_columns {
     my $worksheet = shift;
     my $col       = 0;
-    for my $width ( @{ $worksheet->{__col_widths} } ) {
-        $worksheet->set_column( $col, $col, $width ) if $width;
+    for my $width (@{$worksheet->{__col_widths}}) {
+        $worksheet->set_column($col, $col, $width) if $width;
         $col++;
     }
 }
@@ -171,7 +411,7 @@ sub store_string_widths {
     #
     my $old_width    = $worksheet->{__col_widths}->[$col];
     my $string_width = string_width($token);
-    if ( not defined $old_width or $string_width > $old_width ) {
+    if (not defined $old_width or $string_width > $old_width) {
 
         # You may wish to set a minimum column width as follows.
         #return undef if $string_width < 10;
@@ -226,7 +466,7 @@ sub set_excel_formats {
     );
 
     # size => 20,
-    my $rows_fmt = $workbook->add_format( align => 'left', border => 1 );
+    my $rows_fmt = $workbook->add_format(align => 'left', border => 1);
 
     # $rows_fmt->set_text_wrap();
     my $date_fmt = $workbook->add_format(
@@ -248,20 +488,20 @@ sub set_excel_formats {
     $sql_fmt->set_size(8);
     $sql_fmt->set_font('Arial Narrow');
     $sql_fmt->set_align('bottom');
-    $workbook->set_custom_color( 40, 141, 180, 226 );
+    $workbook->set_custom_color(40, 141, 180, 226);
     my $map_fmt = $workbook->add_format(
         bold     => 1,
         border   => 2,
         bg_color => 40,
     );
-    my $acca_color = $workbook->set_custom_color( 40, 230, 230, 230 )
+    my $acca_color = $workbook->set_custom_color(40, 230, 230, 230)
       ;    #light grey used in ACCA template
 
 # $workbook->set_custom_color(40, 230,  230,  230); # light grey used in ACCA template
-    my $light_orange = $workbook->set_custom_color( 43, 255, 226, 171 );
-    my $ligth_yellow = $workbook->set_custom_color( 42, 255, 255, 153 );
-    my $light_purple = $workbook->set_custom_color( 41, 225, 204, 255 );
-    my $light_green  = $workbook->set_custom_color( 44, 204, 255, 153 );
+    my $light_orange = $workbook->set_custom_color(43, 255, 226, 171);
+    my $ligth_yellow = $workbook->set_custom_color(42, 255, 255, 153);
+    my $light_purple = $workbook->set_custom_color(41, 225, 204, 255);
+    my $light_green  = $workbook->set_custom_color(44, 204, 255, 153);
     my $target_field_fmt = $workbook->add_format();
     $target_field_fmt->copy($heading);
 
@@ -282,20 +522,20 @@ sub set_excel_formats {
     # $source_field_fmt->set_bg_color($ligth_yellow);
 
     my %formats;
-    my $grey_color = $workbook->set_custom_color( 45, 128, 128, 128 );
+    my $grey_color = $workbook->set_custom_color(45, 128, 128, 128);
     my $fm_grey =
-      add_fmt_with_color( $workbook, $target_field_fmt, $grey_color );
-    my $purple_color = $workbook->set_custom_color( 46, 204, 192, 218 );
+      add_fmt_with_color($workbook, $target_field_fmt, $grey_color);
+    my $purple_color = $workbook->set_custom_color(46, 204, 192, 218);
     $formats{fm_purple} =
-      add_fmt_with_color( $workbook, $target_field_fmt, $purple_color );
+      add_fmt_with_color($workbook, $target_field_fmt, $purple_color);
 
-    my $light_blue_color = $workbook->set_custom_color( 47, 183, 222, 222 );
+    my $light_blue_color = $workbook->set_custom_color(47, 183, 222, 222);
     $formats{fm_light_blue} =
-      add_fmt_with_color( $workbook, $target_field_fmt, $light_blue_color );
+      add_fmt_with_color($workbook, $target_field_fmt, $light_blue_color);
 
-    my $green_color = $workbook->set_custom_color( 48, 0, 176, 80 );
+    my $green_color = $workbook->set_custom_color(48, 0, 176, 80);
     $formats{fm_green} =
-      add_fmt_with_color( $workbook, $target_field_fmt, $green_color );
+      add_fmt_with_color($workbook, $target_field_fmt, $green_color);
 
     # $hs_name_frmt->set_bg_color($acca_color);
 
@@ -317,7 +557,7 @@ sub set_excel_formats {
 }
 
 sub add_fmt_with_color {
-    my ( $workbook, $target_field_fmt, $color ) = @_;
+    my ($workbook, $target_field_fmt, $color) = @_;
     my $fm = $workbook->add_format();
     $fm->copy($target_field_fmt);
     $fm->set_bg_color($color);
@@ -330,13 +570,13 @@ sub add_fmt_with_color {
 sub add_write_handler_autofit {
     my $sheet = shift;
 ###############################################################################
-   #
-   # Add a handler to store the width of the longest string written to a column.
-   # We use the stored width to simulate an autofit of the column widths.
-   #
-   # You should do this for every worksheet you want to autofit.
-   #
-    $sheet->add_write_handler( qr[\w], \&store_string_widths );
+ #
+ # Add a handler to store the width of the longest string written to a column.
+ # We use the stored width to simulate an autofit of the column widths.
+ #
+ # You should do this for every worksheet you want to autofit.
+ #
+    $sheet->add_write_handler(qr[\w], \&store_string_widths);
 }
 
 #
@@ -347,12 +587,12 @@ sub fill_excel_header {
     my $revision_history = shift;
     my $head_prop        = shift;
     my $date             = strftime "%d.%m.%Y", localtime;
-    $revision_history->write( 0, 0, "Date",        $ref_formats->{heading} );
-    $revision_history->write( 0, 1, "Version",     $ref_formats->{heading} );
-    $revision_history->write( 0, 2, "Description", $ref_formats->{heading} );
-    $revision_history->write( 0, 3, "Author",      $ref_formats->{heading} );
-    $revision_history->write( 1, 0, $date,         $ref_formats->{date_fmt} );
-    $revision_history->write( 1, 1, "1.0",         $ref_formats->{num_fmt} );
+    $revision_history->write(0, 0, "Date",        $ref_formats->{heading});
+    $revision_history->write(0, 1, "Version",     $ref_formats->{heading});
+    $revision_history->write(0, 2, "Description", $ref_formats->{heading});
+    $revision_history->write(0, 3, "Author",      $ref_formats->{heading});
+    $revision_history->write(1, 0, $date,         $ref_formats->{date_fmt});
+    $revision_history->write(1, 1, "1.0",         $ref_formats->{num_fmt});
     $revision_history->write(
         1, 2,
         "Initial version",
@@ -363,8 +603,8 @@ sub fill_excel_header {
         "Мишин Н.А.",
         $ref_formats->{rows_fmt}
     );
-    $revision_history->write( 0, 5, "Project", $ref_formats->{heading} );
-    $revision_history->write( 0, 6, "Server",  $ref_formats->{heading} );
+    $revision_history->write(0, 5, "Project", $ref_formats->{heading});
+    $revision_history->write(0, 6, "Server",  $ref_formats->{heading});
     $revision_history->write(
         1, 5,
         $head_prop->{ToolInstanceID},
@@ -375,17 +615,17 @@ sub fill_excel_header {
         $head_prop->{ServerName},
         $ref_formats->{rows_fmt}
     );
-    $revision_history->write( 4, 5, "Id",          $ref_formats->{heading} );
-    $revision_history->write( 4, 6, "Parent_id",   $ref_formats->{heading} );
-    $revision_history->write( 4, 7, "Sequence",    $ref_formats->{heading} );
-    $revision_history->write( 4, 8, "Description", $ref_formats->{heading} );
+    $revision_history->write(4, 5, "Id",          $ref_formats->{heading});
+    $revision_history->write(4, 6, "Parent_id",   $ref_formats->{heading});
+    $revision_history->write(4, 7, "Sequence",    $ref_formats->{heading});
+    $revision_history->write(4, 8, "Description", $ref_formats->{heading});
 }
 
 sub enc_terminal {
     if (-t) {
-        binmode( STDIN,  ":encoding(console_in)" );
-        binmode( STDOUT, ":encoding(console_out)" );
-        binmode( STDERR, ":encoding(console_out)" );
+        binmode(STDIN,  ":encoding(console_in)");
+        binmode(STDOUT, ":encoding(console_out)");
+        binmode(STDERR, ":encoding(console_out)");
     }
 }
 
@@ -393,32 +633,32 @@ sub enc_terminal {
 # New subroutine "get_next_stage_for_link" extracted - Thu Nov 21 10:27:27 2014.
 #
 sub get_next_stage_for_link {
-    my ( $links, $stage, $direction ) = @_;
+    my ($links, $stage, $direction) = @_;
 
     # input_links output_links
     # @{$stage->{$suffix}}
-    my ( $out_suffix, $in_suffix ) = ( '', '' );
-    if ( $direction eq 'start' ) {
+    my ($out_suffix, $in_suffix) = ('', '');
+    if ($direction eq 'start') {
         $out_suffix = 'output_links';
         $in_suffix  = 'input_links';
     }
-    elsif ( $direction eq 'end' ) {
+    elsif ($direction eq 'end') {
         $out_suffix = 'input_links';
         $in_suffix  = 'output_links';
     }
 
-  #массив стадий, которые идут сразу за нашей
+#массив стадий, которые идут сразу за нашей
     my @next_stages = ();
 
 #Выводим все выходные линки из текущей стадии
-    for my $out_link_name ( @{ $stage->{$out_suffix} } ) {
+    for my $out_link_name (@{$stage->{$out_suffix}}) {
 
         #идем по всем стадиям
-        for my $loc_stage ( @{$links} ) {
+        for my $loc_stage (@{$links}) {
 
 #ищем входные линки совпадающие с нашим выходным
-            for my $in_link_name ( @{ $loc_stage->{$in_suffix} } ) {
-                if ( $out_link_name eq $in_link_name ) {
+            for my $in_link_name (@{$loc_stage->{$in_suffix}}) {
+                if ($out_link_name eq $in_link_name) {
 
 # say "\nЛинки совпали, ура!!!\n\n";
 # say "$out_link_name in $stage->{stage_name} eq $in_link_name in $loc_stage->{stage_name}";
@@ -436,7 +676,7 @@ sub get_next_stage_for_link {
 }
 
 sub check_for_dataset {
-    my ( $cnt_links, $stage, $links_type ) = @_;
+    my ($cnt_links, $stage, $links_type) = @_;
 
 #также, если стейдж типа ds или это источник в виде базы данных 'pxbridge'
 #у которого нет входящих линков для 1-го и выходящих для последнего
@@ -445,8 +685,8 @@ sub check_for_dataset {
     my $is_dataset = 'no';
 
     #кладем
-    if ( $cnt_links == 1
-        && substr( ${ $stage->{$links_type} }[0], -2 ) eq 'ds' )
+    if ($cnt_links == 1
+        && substr(${$stage->{$links_type}}[0], -2) eq 'ds')
     {
         $is_dataset = 'yes';
     }
@@ -454,13 +694,12 @@ sub check_for_dataset {
 }
 
 sub check_for_started {
-    my ( $cnt_links, $stage, $ref_start_stages_of, $is_dataset ) = @_;
+    my ($cnt_links, $stage, $ref_start_stages_of, $is_dataset) = @_;
     return (
-        (
-            exists $ref_start_stages_of->{ $stage->{operator_name} }
+        (   exists $ref_start_stages_of->{$stage->{operator_name}}
               && $cnt_links == 0
         )
-          || ( $is_dataset eq 'yes' )
+          || ($is_dataset eq 'yes')
     );
 
 }
@@ -468,7 +707,7 @@ sub check_for_started {
 sub reformat_links {
     my $parsed_dsx = shift;
 
-  #my $link_and_fields = get_parsed_fields_by_link_name('L101', $parsed_fields);
+#my $link_and_fields = get_parsed_fields_by_link_name('L101', $parsed_fields);
 
     # print DumpTree( $parsed_dsx,   '$parsed_dsx' );
     # print DumpTree( $parsed_fields,   '$parsed_fields' );
@@ -477,14 +716,14 @@ sub reformat_links {
     my @only_links            = ();
     my @only_stages_and_links = ();
     my %stages_with_types     = ();
-    foreach my $stage ( @{$parsed_dsx} ) {
+    foreach my $stage (@{$parsed_dsx}) {
         my %only_stages  = ();
         my @input_links  = ();
         my @output_links = ();
         $only_stages{stage_name}    = $stage->{stage_name};
         $only_stages{operator_name} = $stage->{operator_name};
-        if ( $stage->{ins}->{in} eq 'yes' ) {
-            for my $inputs ( @{ $stage->{ins}->{inputs} } ) {
+        if ($stage->{ins}->{in} eq 'yes') {
+            for my $inputs (@{$stage->{ins}->{inputs}}) {
                 my %in_links = ();
                 $in_links{link_name} = $inputs->{link_name};
 
@@ -494,26 +733,25 @@ sub reformat_links {
                 $in_links{stage_name}    = $stage->{stage_name};
                 $in_links{inout_type}    = $inputs->{inout_type};
 
-                if ( $inputs->{is_param} eq 'yes' ) {
+                if ($inputs->{is_param} eq 'yes') {
                     $in_links{is_param}         = 'yes';
                     $in_links{params}           = $inputs->{params};
                     $in_links{link_keep_fields} = $inputs->{link_keep_fields};
 
                     my $in_link_name = $inputs->{link_name};
                     my $in_real_link_name =
-                      substr( $in_link_name,
-                        index( $in_link_name, $char ) + 1 );
+                      substr($in_link_name, index($in_link_name, $char) + 1);
 
                 }
                 push @only_links,  \%in_links;
                 push @input_links, $inputs->{link_name};
-                $stages_with_types{ $inputs->{link_name} . '_'
-                      . $inputs->{inout_type} } = \%in_links;
+                $stages_with_types{$inputs->{link_name} . '_'
+                      . $inputs->{inout_type}} = \%in_links;
             }
         }
         $only_stages{input_links} = \@input_links;
-        if ( $stage->{ins}->{out} eq 'yes' ) {
-            for my $outputs ( @{ $stage->{ins}->{outputs} } ) {
+        if ($stage->{ins}->{out} eq 'yes') {
+            for my $outputs (@{$stage->{ins}->{outputs}}) {
                 my %out_links = ();
                 $out_links{link_name} = $outputs->{link_name};
 
@@ -523,21 +761,22 @@ sub reformat_links {
                 $out_links{stage_name}    = $stage->{stage_name};
                 $out_links{inout_type}    = $outputs->{inout_type};
 
-                if ( $outputs->{is_param} eq 'yes' ) {
-                    $out_links{is_param}         = 'yes';
-                    $out_links{params}           = $outputs->{params};
-                    $out_links{link_keep_fields} = $outputs->{link_keep_fields};
+                if ($outputs->{is_param} eq 'yes') {
+                    $out_links{is_param} = 'yes';
+                    $out_links{params}   = $outputs->{params};
+                    $out_links{link_keep_fields} =
+                      $outputs->{link_keep_fields};
 
                     my $out_link_name = $outputs->{link_name};
                     my $out_real_link_name =
-                      substr( $out_link_name,
-                        index( $out_link_name, $char ) + 1 );
+                      substr($out_link_name,
+                        index($out_link_name, $char) + 1);
 
                 }
                 push @only_links,   \%out_links;
                 push @output_links, $outputs->{link_name};
-                $stages_with_types{ $outputs->{link_name} . '_'
-                      . $outputs->{inout_type} } = \%out_links;
+                $stages_with_types{$outputs->{link_name} . '_'
+                      . $outputs->{inout_type}} = \%out_links;
             }
         }
         $only_stages{output_links} = \@output_links;
@@ -549,7 +788,7 @@ sub reformat_links {
     $out_hash{stages_with_types}     = \%stages_with_types;
     my %cnt_links;
     for (@only_links) {
-        $cnt_links{ $_->{link_name} . '_' . $_->{inout_type} }++;
+        $cnt_links{$_->{link_name} . '_' . $_->{inout_type}}++;
     }
 
     # print DumpTree(\%out_hash, '\%out_hash');
@@ -561,13 +800,13 @@ sub reformat_links {
 #
 
 sub fill_way_and_links {
-    my ( $links, $direction ) = @_;
+    my ($links, $direction) = @_;
 
-    # my $links        = $all->{job_pop}->{only_links}->{only_stages_and_links};
+  # my $links        = $all->{job_pop}->{only_links}->{only_stages_and_links};
     my @start_stages    = qw/copy pxbridge import/;
     my %start_stages_of = map { $_ => 1 } @start_stages;
     my $max             = 0;
-    my $links_type = ( $direction eq 'start' ) ? 'input_links' : 'output_links';
+    my $links_type = ($direction eq 'start') ? 'input_links' : 'output_links';
     my %start_stages_name = ();
     my %a_few_stages      = ();
     my $cnt_stages        = 0 + @{$links};
@@ -575,31 +814,31 @@ sub fill_way_and_links {
     #    say "number of links: $cnt_stages";
     #хэш стейджей с объектами
     my %stages_body;
-    for my $stage ( @{$links} ) {
-        $stages_body{ $stage->{stage_name} } = $stage;
-        my $cnt_links = 0 + @{ $stage->{$links_type} };
+    for my $stage (@{$links}) {
+        $stages_body{$stage->{stage_name}} = $stage;
+        my $cnt_links = 0 + @{$stage->{$links_type}};
 
-        my $is_dataset = check_for_dataset( $cnt_links, $stage, $links_type );
+        my $is_dataset = check_for_dataset($cnt_links, $stage, $links_type);
         my $is_started_links =
-          check_for_started( $cnt_links, $stage, \%start_stages_of,
-            $is_dataset );
+          check_for_started($cnt_links, $stage, \%start_stages_of,
+            $is_dataset);
 
         if ($is_started_links) {
 
-         #находим все начальные линки,их имена!!!
-            $a_few_stages{ $stage->{stage_name} }++;
+       #находим все начальные линки,их имена!!!
+            $a_few_stages{$stage->{stage_name}}++;
         }
         my %link_collection = ();
-        for my $direction ( 'start', 'end' ) {
+        for my $direction ('start', 'end') {
             my $assoc_stages =
-              get_next_stage_for_link( $links, $stage, $direction );
+              get_next_stage_for_link($links, $stage, $direction);
             $link_collection{$direction} = $assoc_stages;
         }
-        $start_stages_name{ $stage->{stage_name} } = \%link_collection;
+        $start_stages_name{$stage->{stage_name}} = \%link_collection;
     }
     my ($lines) =
-      calculate_right_way_for_stages( $direction, $links, \%a_few_stages,
-        \%start_stages_name );
+      calculate_right_way_for_stages($direction, $links, \%a_few_stages,
+        \%start_stages_name);
 
     #my %for_draw = ();
     # @for_draw{'all', 'orig_col', 'j', 'lines', 'links'} =
@@ -642,58 +881,58 @@ sub calculate_right_way_for_stages {
     #
     enc_terminal();
     my %lines = ();
-    foreach my $few_stage ( sort keys %{$ref_a_few_stages} ) {
+    foreach my $few_stage (sort keys %{$ref_a_few_stages}) {
         $lines{$few_stage}++;
         my @elements   = ();
         my @levels     = ();
         my %in_already = ();
-        for ( my $i = 0 ; $i < $cnt_ctages ; $i++ ) {
+        for (my $i = 0; $i < $cnt_ctages; $i++) {
             my %stages_in_level    = ();
             my %collect_stages     = ();
             my $ref_collect_stages = \%collect_stages;
 
             #print "$i\n";
-            if ( $i == 0 ) {
+            if ($i == 0) {
                 $collect_stages{$few_stage} = 1;
                 $in_already{$few_stage}++;
                 push @levels, \%collect_stages;
 
-         #say "Первый элемент: @{[ sort keys %collect_stages ]}\n";
+       #say "Первый элемент: @{[ sort keys %collect_stages ]}\n";
                 my $ref_0_stages =
-                  get_next_stage_in_hash( $few_stage, $ref_start_stages_name,
-                    $direction );
+                  get_next_stage_in_hash($few_stage, $ref_start_stages_name,
+                    $direction);
                 push @levels, $ref_0_stages;
-                foreach my $stg ( keys %{$ref_0_stages} ) {
+                foreach my $stg (keys %{$ref_0_stages}) {
                     $in_already{$stg}++;
                 }
 
-        #say "Второй элемент: @{[ sort keys %{$ref_0_stages} ]}\n";
+      #say "Второй элемент: @{[ sort keys %{$ref_0_stages} ]}\n";
             }
-            elsif ( $i > 1 ) {
-                my $prev_stages = $levels[ $i - 1 ];
-                foreach my $prev_stage ( sort keys %{$prev_stages} ) {
-                    my $ref_stages = get_next_stage_in_hash( $prev_stage,
-                        $ref_start_stages_name, $direction );
+            elsif ($i > 1) {
+                my $prev_stages = $levels[$i - 1];
+                foreach my $prev_stage (sort keys %{$prev_stages}) {
+                    my $ref_stages = get_next_stage_in_hash($prev_stage,
+                        $ref_start_stages_name, $direction);
                     $ref_collect_stages =
-                      merge( $ref_collect_stages, $ref_stages );   #$ref_stages;
+                      merge($ref_collect_stages, $ref_stages);   #$ref_stages;
 
                 }
                 my %hash_for_check = %{$ref_collect_stages};
 
 #проверяем получившийся хэш на стейджи, которые уже были
-                foreach my $stg2 ( keys %hash_for_check ) {
-                    if ( defined $in_already{$stg2} ) {
+                foreach my $stg2 (keys %hash_for_check) {
+                    if (defined $in_already{$stg2}) {
                         delete $hash_for_check{$stg2};
                     }
 
                 }
 
                 $ref_collect_stages = \%hash_for_check;
-                if ( !keys %{$ref_collect_stages} ) {
+                if (!keys %{$ref_collect_stages}) {
                     last;
                 }
                 push @levels, $ref_collect_stages;    #\%collect_stages;
-                foreach my $stg3 ( keys %{$ref_collect_stages} ) {
+                foreach my $stg3 (keys %{$ref_collect_stages}) {
                     $in_already{$stg3}++;
                 }
 
@@ -703,23 +942,23 @@ sub calculate_right_way_for_stages {
         $lines{$few_stage} = \@levels;
     }
 
-    print DumpTree( \%lines, '$hash_ref_lines and direction: ' . $direction );
-    return ( \%lines );
+    print DumpTree(\%lines, '$hash_ref_lines and direction: ' . $direction);
+    return (\%lines);
 }
 
 sub get_next_stage_in_hash {
-    my ( $prev_stage, $ref_start_stages_name, $direction ) = @_;
+    my ($prev_stage, $ref_start_stages_name, $direction) = @_;
 
 #enc_terminal();
 #say 'Для начала выясним, что у нас за переменные:';
 #say 'Будем считать, что в хэше несколько стейджей,тогда пройдем по ним всем!!!:';
 #say 'Предыдущий стейдж :' . $prev_stage;
-    my $ref_link_array    = $ref_start_stages_name->{$prev_stage}->{$direction};
+    my $ref_link_array = $ref_start_stages_name->{$prev_stage}->{$direction};
     my %stage_collections = ();
-    for my $link ( @{$ref_link_array} ) {
+    for my $link (@{$ref_link_array}) {
 
         #       say $link->{stage_name};
-        $stage_collections{ $link->{stage_name} }++;
+        $stage_collections{$link->{stage_name}}++;
     }
     return \%stage_collections;
 }
@@ -747,7 +986,7 @@ sub parse_fields {
 \g{field_name}
 ;
 }xs;
-    while ( $body_for_fields =~ m/$field/g ) {
+    while ($body_for_fields =~ m/$field/g) {
         my %field_param = ();
         $field_param{field_name} = $+{field_name};
         $field_param{is_null}    = $+{is_null};
@@ -787,7 +1026,7 @@ sub parse_in_links {
 )
 )'
 }xs;
-    while ( $body =~ m/$link/g ) {
+    while ($body =~ m/$link/g) {
         my %link_param = ();
         $link_param{link_name}  = $+{link_name};
         $link_param{link_type}  = $+{link_fields};
@@ -798,15 +1037,15 @@ sub parse_in_links {
         $link_param{trans_name} = $+{trans_name}
           if defined $+{trans_name};
         $link_param{is_param} = 'no';
-        if ( defined $+{link_fields} )
+        if (defined $+{link_fields})
 
           #if ( length( $link_param{link_type} ) >= 6
           #&& substr( $link_param{link_type}, 0, 6 ) eq 'modify' )
         {
             $link_param{is_param} = 'yes';
-            $link_param{params}   = parse_fields( $+{link_fields} );
+            $link_param{params}   = parse_fields($+{link_fields});
             $link_param{link_keep_fields} =
-              parse_keep_fields( $+{link_keep_fields} )
+              parse_keep_fields($+{link_keep_fields})
               if defined $+{link_keep_fields};
         }
         push @links, \%link_param;
@@ -879,7 +1118,7 @@ keep
 )
 )'
 }xs;
-    while ( $body =~ m/$link/g ) {
+    while ($body =~ m/$link/g) {
         my %link_param = ();
         $link_param{link_name}  = $+{link_name};
         $link_param{link_type}  = $+{link_fields};
@@ -889,15 +1128,15 @@ keep
         $link_param{trans_name} = $+{trans_name}
           if defined $+{trans_name};
         $link_param{is_param} = 'no';
-        if ( defined $+{link_fields} )
+        if (defined $+{link_fields})
 
           #if ( length( $link_param{link_type} ) >= 6
           #&& substr( $link_param{link_type}, 0, 6 ) eq 'modify' )
         {
             $link_param{is_param} = 'yes';
-            $link_param{params}   = parse_fields( $+{link_fields} );
+            $link_param{params}   = parse_fields($+{link_fields});
             $link_param{link_keep_fields} =
-              parse_keep_fields( $+{link_keep_fields} )
+              parse_keep_fields($+{link_keep_fields})
               if defined $+{link_keep_fields};
         }
         push @links, \%link_param;
@@ -924,16 +1163,16 @@ sub parse_stage_body {
 ## Outputs
 =cut
 
-    my ( $inputs, $outputs ) = ( '', '' );
+    my ($inputs, $outputs) = ('', '');
     $outs{in}   = 'no';
     $outs{out}  = 'no';
     $outs{body} = $stage_body;
-    if ( $stage_body =~ $inputs_rx ) {
-        $outs{inputs} = parse_in_links( $+{inputs_body} );
+    if ($stage_body =~ $inputs_rx) {
+        $outs{inputs} = parse_in_links($+{inputs_body});
         $outs{in}     = 'yes';
     }
-    if ( $stage_body =~ $outputs_rx ) {
-        $outs{outputs} = parse_out_links( $+{outputs_body} );
+    if ($stage_body =~ $outputs_rx) {
+        $outs{outputs} = parse_out_links($+{outputs_body});
         $outs{out}     = 'yes';
     }
     return \%outs;
@@ -959,9 +1198,9 @@ sub parse_orchestrate_body {
     my $ORCHESTRATE_BODY_RX = make_orchestrate_regexp();
     local $/ = '';
     my @parsed_dsx = ();
-    while ( $data =~ m/$ORCHESTRATE_BODY_RX/xsg ) {
+    while ($data =~ m/$ORCHESTRATE_BODY_RX/xsg) {
         my %stage = ();
-        my $ins   = parse_stage_body( $+{stage_body} );
+        my $ins   = parse_stage_body($+{stage_body});
         $stage{ins}           = $ins;
         $stage{stage_name}    = $+{stage_name};
         $stage{operator_name} = $+{operator_name};
@@ -971,16 +1210,17 @@ sub parse_orchestrate_body {
 }
 
 sub get_orchestrate_code {
-    my $rich_records = shift;
+    my ($rich_records, $seach_node) = @_;    #shift;
     my $rec;
     my $Identifier = 'ROOT';
-    my $seach_node = 'OrchestrateCode';
+
+    # my $seach_node = 'OrchestrateCode';
 
     my $curr_ref_array;
 
-    for my $rec1 ( @{$rich_records} ) {
+    for my $rec1 (@{$rich_records}) {
         my $loc_identifier = $rec1->{'fields'}->{'Identifier'};
-        if ( defined $loc_identifier && $loc_identifier eq $Identifier ) {
+        if (defined $loc_identifier && $loc_identifier eq $Identifier) {
             $curr_ref_array = $rec1;
         }
     }
@@ -991,7 +1231,7 @@ sub get_orchestrate_code {
 sub enrich_records {
     my $ref_array_dsrecords = shift;
     my @richer_record       = ();
-    for my $rec ( @{$ref_array_dsrecords} ) {
+    for my $rec (@{$ref_array_dsrecords}) {
         my $fields = get_identifier_and_field_of_record($rec);
         push @richer_record, pack_fields($fields);
     }
@@ -1002,18 +1242,17 @@ sub pack_fields {
     my $fields      = shift;
     my %new_fields  = ();
     my $identtifier = '';
-    if ( defined $fields->{identifier} ) {
+    if (defined $fields->{identifier}) {
         $new_fields{identifier} = $fields->{identifier};
-        $new_fields{fields} =
-          split_fields_by_new_line(
-            $fields->{record_fields_body1} . $fields->{record_fields_body2} );
+        $new_fields{fields}     = split_fields_by_new_line(
+            $fields->{record_fields_body1} . $fields->{record_fields_body2});
         $new_fields{subrecord_body} =
-          reformat_subrecord( $fields->{subrecord_body} );
+          reformat_subrecord($fields->{subrecord_body});
     }
-    elsif ( defined $fields->{identifier2} ) {
+    elsif (defined $fields->{identifier2}) {
         $new_fields{identifier} = $fields->{identifier2};
         $new_fields{fields} =
-          split_fields_by_new_line( $fields->{record_fields_body} );
+          split_fields_by_new_line($fields->{record_fields_body});
     }
     return \%new_fields;
 }
@@ -1021,8 +1260,7 @@ sub pack_fields {
 sub get_identifier_and_field_of_record {
     my $data   = shift;
     my %fields = ();
-    if (
-        $data =~ /
+    if ($data =~ /
 (:?BEGIN[ ]DSRECORD\n
 (?<record_fields_body1>
 .*?
@@ -1044,7 +1282,7 @@ END[ ]DSRECORD)
     {
         %fields = %+;
     }
-    return ( \%fields );
+    return (\%fields);
 
 }
 
@@ -1052,7 +1290,7 @@ sub reformat_subrecord {
     my $curr_record      = shift;
     my $ref_dssubrecords = split_by_subrecords($curr_record);
     my @subrecords       = ();
-    for my $subrec ( @{$ref_dssubrecords} ) {
+    for my $subrec (@{$ref_dssubrecords}) {
         push @subrecords, split_fields_by_new_line($subrec);
     }
     return \@subrecords;
@@ -1061,8 +1299,8 @@ sub reformat_subrecord {
 sub split_by_subrecords {
     my $curr_record = shift;
     local $/ = '';    # Paragraph mode
-    my @dssubrecords = ( $curr_record =~
-          / BEGIN[ ]DSSUBRECORD([\n]   .*?  )END[ ]DSSUBRECORD /xsg );
+    my @dssubrecords = ($curr_record
+          =~ / BEGIN[ ]DSSUBRECORD([\n]   .*?  )END[ ]DSSUBRECORD /xsg);
     return \@dssubrecords;
 }
 
@@ -1097,12 +1335,12 @@ sub split_fields_by_new_line {
         /xsg
       )
     {
-        my ( $value, $name ) = ( '', '' );
-        if ( defined $+{name} ) {
+        my ($value, $name) = ('', '');
+        if (defined $+{name}) {
             $name  = $+{name};
             $value = $+{value};
         }
-        elsif ( defined $+{name2} ) {
+        elsif (defined $+{name2}) {
             $name  = $+{name2};
             $value = $+{value2};
         }
@@ -1113,7 +1351,7 @@ sub split_fields_by_new_line {
 
 sub clear_from_back_slash {
     my $string = shift;
-    if ( defined $string ) {
+    if (defined $string) {
         $string =~ s#\\(['"])#$1#g;
     }
     return $string;
@@ -1149,14 +1387,14 @@ sub parse_records {
     my $data = shift;
     local $/ = '';    # Paragraph mode
     my @records =
-      ( $data =~ / ( BEGIN[ ]DSRECORD[\n]   .*?  END[ ]DSRECORD ) /xsg );
+      ($data =~ / ( BEGIN[ ]DSRECORD[\n]   .*?  END[ ]DSRECORD ) /xsg);
     return \@records;
 }
 
 sub debug {
-    my ( $run_as_a_one, $value ) = @_;
+    my ($run_as_a_one, $value) = @_;
     state $i= 1;
-    if ( ( $i == 1 ) || ( $run_as_a_one != 1 ) ) {
+    if (($i == 1) || ($run_as_a_one != 1)) {
         dump_in_html($value);
     }
     $i++;
@@ -1232,7 +1470,7 @@ $body2
 </html>
 EOT
 
-    write_file_utf8( 'dump.html', $dump );
+    write_file_utf8('dump.html', $dump);
 
 #-------------------------------------------------------------------------------
 
@@ -1245,10 +1483,10 @@ sub write_file_utf8 {
     my $ustr   = $string;    #"simple unicode string \x{0434} indeed";
 
     {
-        open( my $FH, ">:encoding(UTF-8)", $name )
+        open(my $FH, ">:encoding(UTF-8)", $name)
           or die "Failed to open file - $!";
 
-        write_file( $FH, $ustr )
+        write_file($FH, $ustr)
           or warn "Failed write_file";
     }
 }
