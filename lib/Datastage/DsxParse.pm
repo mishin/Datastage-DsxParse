@@ -196,22 +196,40 @@ sub make_mapping_job {
     # input_links
     # TranRestructEndDate:L5
     # Htf13SgLoansRestructHist_Insert
-    my $j          = 3;
-    my $col        = 7;
-    my $links      = $param_fields->{job_prop}->{links};
-    my @fill_excel = ();
+    my $j                     = 3;
+    my $col                   = 7;
+    my $links                 = $param_fields->{job_prop}->{links};
+    my @fill_excel            = ();
+    my $new_number_of_records = 0;
+    my $rec_fields            = 3;
     for my $final_stage_for_draw (keys %start_stages_for_mapping) {
+
+        $rec_fields = $rec_fields + $new_number_of_records;
+        say $rec_fields;
 
 # $curr_job->write('D3', $final_stage_for_draw,         $ref_formats->{rows_fmt});
         my $link_body =
           get_body_of_stage($param_fields, $final_stage_for_draw, $links);
-        push @fill_excel, $link_body;
+
+        # print Dumper @{$$link_body[0]}+0;#$link_body;
+        $curr_job->write_row('B' . $rec_fields, $link_body);
+        $new_number_of_records = @{$$link_body[0]} + 0;
+
+        # push @fill_excel, $link_body;
 
         # A3
         # debug(1, $link_body);
     }
 
-    $curr_job->write_col('B3', \@fill_excel);
+# my @show_fields=();
+# for my $array(@fill_excel){
+    # for my $record(@{$array}){
+    # push @show_fields, $record;
+    # }
+    # }
+
+    #debug(1, \@show_fields);
+
     return $curr_job;
 }
 
