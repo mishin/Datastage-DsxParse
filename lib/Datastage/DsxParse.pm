@@ -37,11 +37,13 @@ sub parse_dsx {
     my $rich_records        = enrich_records($ref_array_dsrecords);
     my $orchestrate_code =
       get_orchestrate_code($rich_records, 'OrchestrateCode');
-    my $parsed_dsx = parse_orchestrate_body($orchestrate_code);
-    my $links      = reformat_links($parsed_dsx);
-    my $direction  = 'end';
-    my $lines      = fill_way_and_links($links, $direction);
-
+    my ($parsed_dsx, $links, $direction, $lines);
+    if (defined $orchestrate_code) {
+        $parsed_dsx = parse_orchestrate_body($orchestrate_code);
+        $links      = reformat_links($parsed_dsx);
+        $direction  = 'end';
+        $lines      = fill_way_and_links($links, $direction);
+    }
     my %job_prop = ();
     @job_prop{
         'header_and_job', 'header_fields', 'rich_records',
@@ -2161,4 +2163,3 @@ See L<http://dev.perl.org/licenses/> for more information.
 
 
 =cut
-
