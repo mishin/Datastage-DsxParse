@@ -6,20 +6,12 @@ use warnings;
 use Data::TreeDumper;
 use Data::Dumper;
 use File::Slurp qw(write_file read_file);
-
-#use Scalar::Util qw(blessed dualvar readonly refaddr reftype
-#  tainted weaken isweak isvstring looks_like_number
-#  set_prototype);
 use Encode::Locale;
 use Hash::Merge qw( merge );
 use Spreadsheet::WriteExcel;
 use POSIX qw(strftime);
 use File::Basename;
 use List::Util qw(first max maxstr min minstr reduce shuffle sum);
-
-#use Data::Walker qw(:direct);
-
-#use re 'debug';
 
 our $VERSION = "0.01";
 use Sub::Exporter -setup => {
@@ -31,7 +23,7 @@ use Sub::Exporter -setup => {
     ],
 };
 
-#debug( 1, $header_fields );
+
 sub parse_dsx {
     my ($file_name)    = @_;
     my $data           = read_file($file_name);
@@ -192,10 +184,6 @@ sub make_mapping_job {
         $ref_formats->{rows_fmt}
     );
 
-    # $all->{job_pop}->{only_links}->{stages_with_types}
-    # input_links
-    # TranRestructEndDate:L5
-    # Htf13SgLoansRestructHist_Insert
     my $j                     = 3;
     my $col                   = 7;
     my $links                 = $param_fields->{job_prop}->{links};
@@ -203,33 +191,17 @@ sub make_mapping_job {
     my $new_number_of_records = 0;
     my $rec_fields            = 3;
     for my $final_stage_for_draw (keys %start_stages_for_mapping) {
-
         $rec_fields = $rec_fields + $new_number_of_records;
         say $rec_fields;
-
-# $curr_job->write('D3', $final_stage_for_draw,         $ref_formats->{rows_fmt});
         my $link_body =
           get_body_of_stage($param_fields, $final_stage_for_draw, $links);
 
-        # print Dumper @{$$link_body[0]}+0;#$link_body;
+        #пишем в excel !!
         $curr_job->write_row('B' . $rec_fields, $link_body);
         $new_number_of_records = @{$$link_body[0]} + 0;
-
-        # push @fill_excel, $link_body;
-
-        # A3
-        # debug(1, $link_body);
     }
 
-# my @show_fields=();
-# for my $array(@fill_excel){
-    # for my $record(@{$array}){
-    # push @show_fields, $record;
-    # }
-    # }
-
     #debug(1, \@show_fields);
-
     return $curr_job;
 }
 
@@ -248,9 +220,12 @@ sub get_body_of_stage {
         }
     }
 
-    #say 'ZZ';
+
     my $link_name = $stage_body->{'input_links'}[0];
-    my $OLEType   = 'CTrxOutput';
+
+    # print Dumper $stage_body;
+    say 'link_name: ' . $link_name;
+    my $OLEType = 'CTrxOutput';
     my $link_body =
       get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
 
@@ -287,55 +262,43 @@ sub get_body_of_stage {
 
     #6.fields
     my $fields = make_sql_fields_for_show($sql_fields);
+    say '$fields: ';
+    print Dumper $fields;
 
     #7.types
-    my $types = get_sql_types($sql_fields);
+    my $types = get_sql_types($sql_fields, $fields);
 
     #8.Вхождение в ключ
-    my $key = get_sql_keys($sql_fields);
+    my $key = get_sql_keys($sql_fields, $fields);
 
     #9.Обязательность
-    my $nullable = get_sql_mandatory($sql_fields);
+    my $nullable = get_sql_mandatory($sql_fields, $fields);
 
+    #10.Формула
+    my $parsedderivation =
+      get_sql_field($sql_fields, 'ParsedDerivation', $fields);
+
+    #10.Исходное поле
+    my $sourcecolumn =
+      get_source_sql_field($sql_fields, 'SourceColumn', $fields);
+
+#11.Если $sourcecolumn
+#address_insert.STRNAM;address_insert.HOUSE;address_insert.CORP;address_insert.FLAT
+#то нужно разделить строку на число источников
+
+    # print Dumper $sourcecolumn;
     my $big_array = make_data_4_show(
-        $project, $job,   $server, $schema, $table_name,
-        $fields,  $types, $key,    $nullable
+        $project,    $job,              $server, $schema,
+        $table_name, $fields,           $types,  $key,
+        $nullable,   $parsedderivation, $sourcecolumn
     );
-
-    # Connection
-# |  |- DataSource
-    # |  |  |- Name = gr_address_insert
-# |     |  |  |- NextAliasID = 2
-# |     |  |  |- NextID = 7
-# |     |  |  |- NLSLocale = ,,,,
-# |     |  |  |- NULLIndicatorPosition = 0
-# |     |  |  |- OLEType = CJobDefn
-# @eec =  (
-    # ['maggie', 'milly', 'molly', 'may'  ],
-    # [13,       14,      15,      16     ],
-    # ['shell',  'star',  'crab',  'stone']
-    # );
-
-# $worksheet->write_row('A1', \@eec);
-# Would produce a worksheet as follows:
-
-    # -----------------------------------------------------------
-# |   |    A    |    B    |    C    |    D    |    E    | ...
-    # -----------------------------------------------------------
-# | 1 | maggie  | 13      | shell   | ...     |  ...    | ...
-# | 2 | milly   | 14      | star    | ...     |  ...    | ...
-# | 3 | molly   | 15      | crab    | ...     |  ...    | ...
-# | 4 | may     | 16      | stone   | ...     |  ...    | ...
-# | 5 | ...     | ...     | ...     | ...     |  ...    | ...
-# | 6 | ...     | ...     | ...     | ...     |  ...    | ...
-    return
-      $big_array
-      ; #\%table_comp;#$server;#$job;#$param_fields;#\%table_comp;    #$stage_fields;#$link_body;#$sql_fields;
+    return $big_array;
 }
 
 sub make_data_4_show {
-    my ($project, $job,   $server, $schema, $table_name,
-        $fields,  $types, $key,    $nullable
+    my ($project,    $job,              $server, $schema,
+        $table_name, $fields,           $types,  $key,
+        $nullable,   $parsedderivation, $sourcecolumn
     ) = @_;
     my @project    = map {$project} @{$fields};
     my @job        = map {$job} @{$fields};
@@ -348,18 +311,158 @@ sub make_data_4_show {
 
     # }
     my @big_array = (
-        \@project, \@job,  \@server, \@schema, \@table_name,
-        $fields,   $types, $key,     $nullable
+        \@project,    \@job,             \@server, \@schema,
+        \@table_name, $fields,           $types,   $key,
+        $nullable,    $parsedderivation, $sourcecolumn
     );
     return \@big_array;
 }
+
+sub get_source_sql_field {
+    my ($sql_fields, $field_name) = @_;
+    my @sql_user_fiendly = ();
+    for my $sql_field (@{$sql_fields}) {
+
+        my $src_column = $sql_field->{'SourceColumn'};
+        my ($cnt, $src_fields) = is_multiple_source($src_column);
+        if ($cnt > 1) {
+
+            # say 'SourceColumn: ' . $src_column;
+            for my $field (@{$src_fields}) {
+                push @sql_user_fiendly, from_dsx_2_utf($field);
+            }
+        }
+        else {
+
+            push @sql_user_fiendly, from_dsx_2_utf($sql_field->{$field_name});
+        }
+    }
+    return \@sql_user_fiendly;
+}
+
+
+sub get_sql_field {
+    my ($sql_fields, $field_name) = @_;
+    my @sql_user_fiendly = ();
+    for my $sql_field (@{$sql_fields}) {
+
+        my $src_column = $sql_field->{'SourceColumn'};
+        my ($cnt, $src_fields) = is_multiple_source($src_column);
+        if ($cnt > 1) {
+
+            # say 'SourceColumn: ' . $src_column;
+            for (@{$src_fields}) {
+                push @sql_user_fiendly,
+                  from_dsx_2_utf($sql_field->{$field_name});
+            }
+        }
+        else {
+
+            push @sql_user_fiendly, from_dsx_2_utf($sql_field->{$field_name});
+        }
+    }
+    return \@sql_user_fiendly;
+}
+
+
+sub is_multiple_source {
+    my ($src_column) = @_;
+    my @src_fields = ();
+    if (defined $src_column) {
+        @src_fields = split(/;/, $src_column);
+    }
+    my $cnt = @src_fields + 0;
+    return ($cnt, \@src_fields);
+}
+
+
+sub get_sql_types {
+    my ($sql_fields, $fields) = @_;
+    my @sql_user_fiendly = ();
+    for my $sql_field (@{$sql_fields}) {
+
+        my $src_column = $sql_field->{'SourceColumn'};
+        my ($cnt, $src_fields) = is_multiple_source($src_column);
+        if ($cnt > 1) {
+
+            # say 'SourceColumn: ' . $src_column;
+            for (@{$src_fields}) {
+                push @sql_user_fiendly,
+                  decode_sql_type($sql_field->{SqlType},
+                    $sql_field->{Precision});
+            }
+        }
+        else {
+
+            # $fields
+            push @sql_user_fiendly,
+              decode_sql_type($sql_field->{SqlType}, $sql_field->{Precision});
+        }
+    }
+    return \@sql_user_fiendly;
+}
+
+sub make_sql_fields_for_show {
+    my ($sql_fields) = @_;
+    my @sql_user_fiendly = ();
+    for my $sql_field (@{$sql_fields}) {
+
+#address_insert.STRNAM;address_insert.HOUSE;address_insert.CORP;address_insert.FLAT
+        my @src_fields = ();
+        my $src_column = $sql_field->{'SourceColumn'};
+        my $field_name = $sql_field->{'ColumnReference'};
+        my ($cnt, $src_fields) = is_multiple_source($src_column);
+        if ($cnt > 1) {
+            say 'SourceColumn: ' . $src_column;
+            for (@{$src_fields}) {
+                push @sql_user_fiendly, $field_name;
+            }
+        }
+        else {
+            push @sql_user_fiendly, $field_name;
+        }
+    }
+    print Dumper \@sql_user_fiendly;
+    return \@sql_user_fiendly;
+}
+
+sub from_dsx_2_utf {
+    my $string = shift;
+    if (defined $string) {
+        $string =~ s#\Q\(A)\E#\n#g;
+        $string =~ s#\Q\(9)\E#\t#g;
+        $string =~ s#\\([^(])#$1#g;
+        $string =~ s#\\\((...)\)#chr(hex$1)#gsme;
+    }
+    return $string;
+}
+
+sub double_slash_2_slash {
+    my $string = shift;
+    $string =~ s#\\\\#\\#g;
+    return $string;
+}
+
 
 sub get_sql_mandatory {
     my ($sql_fields) = @_;
     my @sql_user_fiendly = ();
     for my $sql_field (@{$sql_fields}) {
-        my $key = ($sql_field->{Nullable} == 1) ? 'НЕТ' : 'ДА';
-        push @sql_user_fiendly, $key;
+        my $key = ($sql_field->{Nullable} == '1') ? 'НЕТ' : 'ДА';
+
+
+        my $src_column = $sql_field->{'SourceColumn'};
+        my ($cnt, $src_fields) = is_multiple_source($src_column);
+        if ($cnt > 1) {
+
+            # say 'SourceColumn: ' . $src_column;
+            for (@{$src_fields}) {
+                push @sql_user_fiendly, $key;
+            }
+        }
+        else {
+            push @sql_user_fiendly, $key;
+        }
     }
     return \@sql_user_fiendly;
 }
@@ -368,19 +471,22 @@ sub get_sql_keys {
     my ($sql_fields) = @_;
     my @sql_user_fiendly = ();
     for my $sql_field (@{$sql_fields}) {
-        my $key = ($sql_field->{KeyPosition} == 1) ? 'ДА' : 'НЕТ';
-        push @sql_user_fiendly, $key;
-    }
-    return \@sql_user_fiendly;
-}
+        my $key = ($sql_field->{KeyPosition} == '1') ? 'ДА' : 'НЕТ';
+
+        my $src_column = $sql_field->{'SourceColumn'};
+        my ($cnt, $src_fields) = is_multiple_source($src_column);
+        if ($cnt > 1) {
+
+            # say 'SourceColumn: ' . $src_column;
+            for (@{$src_fields}) {
+                push @sql_user_fiendly, $key;
+            }
+        }
+        else {
 
 
-sub get_sql_types {
-    my ($sql_fields) = @_;
-    my @sql_user_fiendly = ();
-    for my $sql_field (@{$sql_fields}) {
-        push @sql_user_fiendly,
-          decode_sql_type($sql_field->{SqlType}, $sql_field->{Precision});
+            push @sql_user_fiendly, $key;
+        }
     }
     return \@sql_user_fiendly;
 }
@@ -411,14 +517,6 @@ sub decode_sql_type {
     return $sql_type;
 }
 
-sub make_sql_fields_for_show {
-    my ($sql_fields) = @_;
-    my @sql_user_fiendly = ();
-    for my $sql_field (@{$sql_fields}) {
-        push @sql_user_fiendly, $sql_field->{ColumnReference};
-    }
-    return \@sql_user_fiendly;
-}
 
 sub get_job_name {
     my ($rich_records, $oletype, $field_name) = @_;    #shift;
