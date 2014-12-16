@@ -208,35 +208,11 @@ sub make_mapping_job {
         say '$final_stage_for_draw: ' . $final_stage_for_draw;
 
         # print Dumper $final_stage_for_draw;
-        if ($final_stage_for_draw eq 'ADR') {
-            push @fill_excel, $link_body;
-        }
+        #if ($final_stage_for_draw eq 'ADR') {
+          #  push @fill_excel, $link_body;
+       # }
     }
 
-# my $debug_variable=\@fill_excel;
-#   BEGIN DSRECORD
-    # Identifier "V6S0P3"
-    # OLEType "CCustomOutput"
-    # Readonly "0"
-    # Name "address_insert"
-    # Partner "V0S3|V0S3P7"
-    # Columns "COutputColumn"
-
-    # ParsedDerivation "address.ID"
-    # Name "address"
-    # BEGIN DSRECORD
-    # Identifier "V6S2P1"
-    # OLEType "CCustomOutput"
-    # Readonly "0"
-    # Name "address"
-    # Partner "V6S0|V6S0P1"
-    # Properties "CCustomProperty"
-    # BEGIN DSSUBRECORD
-    # Name "dataset"
-    # Value "#PS_CONNECTIONS.CDB_FILE_PATH#guarant_address_load.ds"
-    # END DSSUBRECORD
-    # Columns "COutputColumn"
-    # BEGIN DSSUBRECORD
     my $stage_name = 'address_insert';
     my $debug_variable = get_stage($links, $stage_name);
 
