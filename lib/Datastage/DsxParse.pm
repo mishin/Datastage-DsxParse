@@ -54,8 +54,9 @@ sub parse_dsx {
       );
 
   #итак, все рассичтали, можно рисовать в excel
-    make_excel_and_fill_header($file_name, $header_fields, \%job_prop);
-    return $rich_records;    #$header_and_job;
+    my $debug_variable =
+      make_excel_and_fill_header($file_name, $header_fields, \%job_prop);
+    return $debug_variable;    #$header_and_job;
 }
 
 sub make_excel_and_fill_header {
@@ -81,12 +82,13 @@ sub make_excel_and_fill_header {
     my %param_fields = ();
     @param_fields{'job_prop', 'ref_formats', 'workbook'} =
       ($job_prop, $ref_formats, $workbook);
-    fill_excel_body(\%param_fields);
+    my $debug_variable = fill_excel_body(\%param_fields);
 
     #$i++;
     #}
     $revision_history->activate();
     autofit_columns($revision_history);    #end_autofit
+    return $debug_variable;
 
     # Run the autofit after you have finished writing strings to the workbook.
 
@@ -108,11 +110,12 @@ sub fill_excel_body {
 # ($ref_formats, $curr_job_end, $job_pop);
 # my $lines = fill_excel_stages(\%job_and_formats_end, 'end');
 
-    my $mapping_sheet = make_mapping_job($param_fields);
+    my ($mapping_sheet, $debug_variable) = make_mapping_job($param_fields);
 
     # autofit_columns($curr_job_end);
 
     autofit_columns($mapping_sheet);
+    return $debug_variable;
 
     # dump_in_html(\%job_and_formats_start);
 }
@@ -199,10 +202,56 @@ sub make_mapping_job {
         #пишем в excel !!
         $curr_job->write_row('B' . $rec_fields, $link_body);
         $new_number_of_records = @{$$link_body[0]} + 0;
+
+        say '$final_stage_for_draw: ' . $final_stage_for_draw;
+
+        # print Dumper $final_stage_for_draw;
+        if ($final_stage_for_draw eq 'ADR') {
+            push @fill_excel, $link_body;
+        }
     }
 
+# my $debug_variable=\@fill_excel;
+#   BEGIN DSRECORD
+    # Identifier "V6S0P3"
+    # OLEType "CCustomOutput"
+    # Readonly "0"
+    # Name "address_insert"
+    # Partner "V0S3|V0S3P7"
+    # Columns "COutputColumn"
+
+    # ParsedDerivation "address.ID"
+    # Name "address"
+    # BEGIN DSRECORD
+    # Identifier "V6S2P1"
+    # OLEType "CCustomOutput"
+    # Readonly "0"
+    # Name "address"
+    # Partner "V6S0|V6S0P1"
+    # Properties "CCustomProperty"
+    # BEGIN DSSUBRECORD
+    # Name "dataset"
+    # Value "#PS_CONNECTIONS.CDB_FILE_PATH#guarant_address_load.ds"
+    # END DSSUBRECORD
+    # Columns "COutputColumn"
+    # BEGIN DSSUBRECORD
+    my $stage_name = 'address_insert';
+    my $debug_variable = get_stage($links, $stage_name);
+
+# address_insert.STRNAM
     #debug(1, \@show_fields);
-    return $curr_job;
+    return ($curr_job, $debug_variable);
+}
+
+sub get_stage {
+    my ($links, $stage_name) = @_;
+    my $stage_body;
+    for my $loc_stage (@{$links}) {
+        if ($loc_stage->{stage_name} eq $stage_name) {
+            $stage_body = $loc_stage;
+        }
+    }
+    return $stage_body;
 }
 
 #
@@ -219,6 +268,10 @@ sub get_body_of_stage {
             $stage_body = $loc_stage;
         }
     }
+
+    # if ($stage_name eq 'ADR'){
+    # print Dumper $stage_body;
+    # }
 
 
     my $link_name = $stage_body->{'input_links'}[0];
@@ -262,8 +315,9 @@ sub get_body_of_stage {
 
     #6.fields
     my $fields = make_sql_fields_for_show($sql_fields);
-    say '$fields: ';
-    print Dumper $fields;
+
+    # say '$fields: ';
+    # print Dumper $fields;
 
     #7.types
     my $types = get_sql_types($sql_fields, $fields);
@@ -407,10 +461,10 @@ sub make_sql_fields_for_show {
     my @sql_user_fiendly = ();
     for my $sql_field (@{$sql_fields}) {
 
-#address_insert.STRNAM;address_insert.HOUSE;address_insert.CORP;address_insert.FLAT
+#address_insert.STRNAM;address_insert.HOUSE;address_insert.CORP;address_insert.FLAT Name
         my @src_fields = ();
         my $src_column = $sql_field->{'SourceColumn'};
-        my $field_name = $sql_field->{'ColumnReference'};
+        my $field_name = $sql_field->{'Name'};
         my ($cnt, $src_fields) = is_multiple_source($src_column);
         if ($cnt > 1) {
             say 'SourceColumn: ' . $src_column;
@@ -422,7 +476,8 @@ sub make_sql_fields_for_show {
             push @sql_user_fiendly, $field_name;
         }
     }
-    print Dumper \@sql_user_fiendly;
+
+    # print Dumper \@sql_user_fiendly;
     return \@sql_user_fiendly;
 }
 
@@ -511,7 +566,7 @@ sub decode_sql_type {
           "for code: $code we have not value \$debug_info: $debug_info";
     }
     my $sql_type = $value;
-    if (defined $precicion && $value ne 'Date') {
+    if (defined $precicion && $precicion != 0 && $value ne 'Date') {
         $sql_type = $value . '(' . $precicion . ')';
     }
     return $sql_type;
