@@ -284,12 +284,22 @@ sub get_body_of_stage {
 
     #sql поля есть
     my $sql_fields = get_sql_fields($link_body);
-    my $xml_prop   = get_xml_properties($param_fields, $stage_name);
-    my $xml_fields = parse_xml_properties($xml_prop);
-    my $table_name = get_table_name($xml_fields);
+    my $xml_prop = get_xml_properties($param_fields, $stage_name);
+    my ($xml_fields, $table_name);
     my %table_comp = ();
-    $table_name =~ /(?<schema>.*)[.](?<table_name>[^.]+)$/;
-    %table_comp = %+;
+    if (defined $xml_prop) {
+        $xml_fields = parse_xml_properties($xml_prop);
+        $table_name = get_table_name($xml_fields);
+        $table_name =~ /(?<schema>.*)[.](?<table_name>[^.]+)$/;
+        %table_comp = %+;
+    }
+    else {
+        $table_name = get_ds_properties($param_fields, $link_name);
+        $table_comp{table_name} = $table_name;
+
+        #значит у нас датасет!!!
+
+    }
 
     #итак собираем excel
     #
@@ -347,6 +357,34 @@ sub get_body_of_stage {
         $nullable,   $parsedderivation, $sourcecolumn
     );
     return $big_array;
+}
+
+sub get_ds_properties {
+    my ($param_fields, $link_name) = @_;
+
+
+    my $OLEType = 'CCustomInput';
+
+    # sub get_parsed_fields_from_all {
+    # my ($param_field, $link_name, $OLEType) = @_;
+
+    my $rec = get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
+
+    # my @d=($param_fields, $stage_name);
+    debug(1, $rec);
+    my $ds_name;
+    for my $rec (@{$rec->{subrecord_body}}) {
+        if ($rec->{Name} eq 'dataset' || $rec->{Name} eq 'file') {
+            $ds_name = from_dsx_2_utf($rec->{Value});
+        }
+    }
+    $ds_name =~ s{(\\\(\d\)0|\\\(\d\))}{}g;
+
+# \(2)\(2)0\(1)\(3)file\(2)#PS_CONNECTIONS.CDB_FILE_PATH#guarant_insert_seq.txt\(2)0
+# \(2)\(2)0\(1)\(3)
+#\(2)
+#\(2)0
+    return $ds_name;
 }
 
 sub make_data_4_show {
@@ -596,7 +634,12 @@ sub get_job_name {
 
 sub get_table_name {
     my ($xml_field) = @_;
-    return $xml_field->{Usage}->{TableName}->{content};
+    if (defined $xml_field) {
+        return uc $xml_field->{Usage}->{TableName}->{content};
+    }
+    else {
+        return 'no';
+    }
 
     # print Dumper $xml_field->{Usage}->{TableName}->{content};
     # my $table_name=$xml_field;
@@ -604,9 +647,14 @@ sub get_table_name {
 
 sub parse_xml_properties {
     my ($xml) = @_;
-    use XML::Simple;
-    $xml =~ s/UTF-16/UTF-8/;
-    my $dom = XMLin($xml);
+    my $dom;
+
+    # print Dumper \$xml;
+    if (defined $xml) {
+        use XML::Simple;
+        $xml =~ s/UTF-16/UTF-8/;
+        $dom = XMLin($xml);
+    }
     return $dom;
 }
 
@@ -1355,7 +1403,7 @@ sub fill_way_and_links {
     my ($links, $direction) = @_;
 
   # my $links        = $all->{job_pop}->{only_links}->{only_stages_and_links};
-    my @start_stages    = qw/copy pxbridge import/;
+    my @start_stages    = qw/copy pxbridge import export/;
     my %start_stages_of = map { $_ => 1 } @start_stages;
     my $max             = 0;
     my $links_type = ($direction eq 'start') ? 'input_links' : 'output_links';
