@@ -300,7 +300,9 @@ sub get_body_of_stage {
     $table_name = $table_comp{table_name};
 
     #6.fields
-    my $fields = make_sql_fields_for_show($sql_fields);
+    my $fields = get_source_sql_field( $sql_fields, 'Name' );
+
+    # make_sql_fields_for_show($sql_fields);
 
     # say '$fields: ';
     # print Dumper $fields;
@@ -316,11 +318,10 @@ sub get_body_of_stage {
 
     #10.Формула
     my $parsedderivation =
-      get_sql_field( $sql_fields, 'ParsedDerivation', $fields );
+      get_source_sql_field( $sql_fields, 'ParsedDerivation' );
 
     #10.Исходное поле
-    my $sourcecolumn =
-      get_source_sql_field( $sql_fields, 'SourceColumn', $fields );
+    my $sourcecolumn = get_source_sql_field( $sql_fields, 'SourceColumn' );
 
 #11.Если $sourcecolumn
 #address_insert.STRNAM;address_insert.HOUSE;address_insert.CORP;address_insert.FLAT
@@ -338,21 +339,83 @@ sub get_body_of_stage {
     );
     my $big_array = make_data_4_show( \@show_values, $fields );
 
+    print Dumper $big_array;
     return $big_array;
+}
+
+sub get_source_sql_field {
+    my ( $sql_fields, $field_name ) = @_;
+    my @sql_user_fiendly = ();
+    for my $sql_field ( @{$sql_fields} ) {
+        my ( $cnt, $src_fields ) =
+          is_multiple_source( $sql_field->{'SourceColumn'} );
+        if ( $cnt > 1 ) {
+            for my $field ( @{$src_fields} ) {
+                if ( $field_name eq 'SourceColumn' ) {
+                    push @sql_user_fiendly, from_dsx_2_utf($field);
+                }
+                else {
+                    push @sql_user_fiendly,
+                      from_dsx_2_utf( $sql_field->{$field_name} );
+                }
+            }
+        }
+        else {
+            push @sql_user_fiendly, from_dsx_2_utf( $sql_field->{$field_name} );
+        }
+    }
+    return \@sql_user_fiendly;
+}
+
+sub get_sql_types {
+    my ( $sql_fields, $fields ) = @_;
+    my @sql_user_fiendly = ();
+    for my $sql_field ( @{$sql_fields} ) {
+        my $type =
+          decode_sql_type( $sql_field->{SqlType}, $sql_field->{Precision} );
+        my ( $cnt, $src_fields ) =
+          is_multiple_source( $sql_field->{'SourceColumn'} );
+        if ( $cnt > 1 ) {
+            for ( @{$src_fields} ) {
+                push @sql_user_fiendly, $type;
+            }
+        }
+        else {
+            push @sql_user_fiendly, $type;
+        }
+    }
+    return \@sql_user_fiendly;
+}
+
+sub make_sql_fields_for_show {
+    my ($sql_fields) = @_;
+    my @sql_user_fiendly = ();
+    for my $sql_field ( @{$sql_fields} ) {
+
+#address_insert.STRNAM;address_insert.HOUSE;address_insert.CORP;address_insert.FLAT Name
+        my @src_fields = ();
+        my $src_column = $sql_field->{'SourceColumn'};
+        my $field_name = $sql_field->{'Name'};
+        my ( $cnt, $src_fields ) = is_multiple_source($src_column);
+        if ( $cnt > 1 ) {
+            say 'SourceColumn: ' . $src_column;
+            for ( @{$src_fields} ) {
+                push @sql_user_fiendly, $field_name;
+            }
+        }
+        else {
+            push @sql_user_fiendly, $field_name;
+        }
+    }
+
+    # print Dumper \@sql_user_fiendly;
+    return \@sql_user_fiendly;
 }
 
 sub get_ds_properties {
     my ( $param_fields, $link_name ) = @_;
-
     my $OLEType = 'CCustomInput';
-
-    # sub get_parsed_fields_from_all {
-    # my ($param_field, $link_name, $OLEType) = @_;
-
     my $rec = get_parsed_fields_from_all( $param_fields, $link_name, $OLEType );
-
-    # my @d=($param_fields, $stage_name);
-    debug( 1, $rec );
     my $ds_name;
     for my $rec ( @{ $rec->{subrecord_body} } ) {
         if ( $rec->{Name} eq 'dataset' || $rec->{Name} eq 'file' ) {
@@ -360,11 +423,6 @@ sub get_ds_properties {
         }
     }
     $ds_name =~ s{(\\\(\d\)0|\\\(\d\))}{}g;
-
-# \(2)\(2)0\(1)\(3)file\(2)#PS_CONNECTIONS.CDB_FILE_PATH#guarant_insert_seq.txt\(2)0
-# \(2)\(2)0\(1)\(3)
-#\(2)
-#\(2)0
     return $ds_name;
 }
 
@@ -375,8 +433,8 @@ sub make_data_4_show {
     # my @entity_array = ();
     for my $entity ( @{$values_4_show} ) {
         my $reftype = reftype $entity;
-        
-           #это не ссылка, а простой скаляр или строка
+
+   #это не ссылка, а простой скаляр или строка
         if ( !defined $reftype ) {
             my @entity_array = map { $entity } @{$fields};
             push @big_array, \@entity_array;
@@ -387,27 +445,6 @@ sub make_data_4_show {
     }
 
     return \@big_array;
-}
-
-sub get_source_sql_field {
-    my ( $sql_fields, $field_name ) = @_;
-    my @sql_user_fiendly = ();
-    for my $sql_field ( @{$sql_fields} ) {
-
-        my $src_column = $sql_field->{'SourceColumn'};
-        my ( $cnt, $src_fields ) = is_multiple_source($src_column);
-        if ( $cnt > 1 ) {
-
-            # say 'SourceColumn: ' . $src_column;
-            for my $field ( @{$src_fields} ) {
-                push @sql_user_fiendly, from_dsx_2_utf($field);
-            }
-        }
-        else {
-            push @sql_user_fiendly, from_dsx_2_utf( $sql_field->{$field_name} );
-        }
-    }
-    return \@sql_user_fiendly;
 }
 
 sub get_sql_field {
@@ -441,57 +478,6 @@ sub is_multiple_source {
     }
     my $cnt = @src_fields + 0;
     return ( $cnt, \@src_fields );
-}
-
-sub get_sql_types {
-    my ( $sql_fields, $fields ) = @_;
-    my @sql_user_fiendly = ();
-    for my $sql_field ( @{$sql_fields} ) {
-
-        my $src_column = $sql_field->{'SourceColumn'};
-        my ( $cnt, $src_fields ) = is_multiple_source($src_column);
-        if ( $cnt > 1 ) {
-
-            # say 'SourceColumn: ' . $src_column;
-            for ( @{$src_fields} ) {
-                push @sql_user_fiendly,
-                  decode_sql_type( $sql_field->{SqlType},
-                    $sql_field->{Precision} );
-            }
-        }
-        else {
-
-            # $fields
-            push @sql_user_fiendly,
-              decode_sql_type( $sql_field->{SqlType}, $sql_field->{Precision} );
-        }
-    }
-    return \@sql_user_fiendly;
-}
-
-sub make_sql_fields_for_show {
-    my ($sql_fields) = @_;
-    my @sql_user_fiendly = ();
-    for my $sql_field ( @{$sql_fields} ) {
-
-#address_insert.STRNAM;address_insert.HOUSE;address_insert.CORP;address_insert.FLAT Name
-        my @src_fields = ();
-        my $src_column = $sql_field->{'SourceColumn'};
-        my $field_name = $sql_field->{'Name'};
-        my ( $cnt, $src_fields ) = is_multiple_source($src_column);
-        if ( $cnt > 1 ) {
-            say 'SourceColumn: ' . $src_column;
-            for ( @{$src_fields} ) {
-                push @sql_user_fiendly, $field_name;
-            }
-        }
-        else {
-            push @sql_user_fiendly, $field_name;
-        }
-    }
-
-    # print Dumper \@sql_user_fiendly;
-    return \@sql_user_fiendly;
 }
 
 sub from_dsx_2_utf {
