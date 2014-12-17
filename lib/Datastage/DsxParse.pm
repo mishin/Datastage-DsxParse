@@ -242,8 +242,12 @@ sub get_body_of_stage {
     my $xml_prop = get_xml_properties($param_fields, $stage_name);
     my ($xml_fields, $table_name);
     my %table_comp = ();
+    say 'ABC1: ';
     if (defined $xml_prop) {
         $xml_fields = parse_xml_properties($xml_prop);
+        say 'ABC: ';
+         # my $sql = $xml_fields->{Usage}->{SQL}->{UserDefinedSQL}->{Statements};
+   
         $table_name = get_table_name($xml_fields);
         $table_name =~ /(?<schema>.*)[.](?<table_name>[^.]+)$/;
         %table_comp = %+;
@@ -570,18 +574,21 @@ sub get_job_name {
 sub get_table_name {
     my ($xml_field) = @_;
     my $table_name = $xml_field->{Usage}->{TableName}->{content};
-    my $sql = $xml_field->{Usage}->{SQL}->{UserDefinedSQL}->{Statements};
+    
     if (defined $table_name) {
         return uc($table_name);
     }
-    elsif (defined $sql) {
+    say 'sql: ';
+    print Dumper $xml_field->{Usage};
+     my $sql = $xml_field->{Usage}->{SQL}->{UserDefinedSQL}->{Statements};
+   
+        # print 'show sql: '.from_dsx_2_utf($sql);
+    if (defined $sql) {
         print 'show sql: '.from_dsx_2_utf($sql);
         print Dumper $xml_field->{Usage}->{SQL};
         return from_dsx_2_utf($sql);
     }
-    else {
-        return 'no';
-    }
+        return 'no';    
 }
 
 sub parse_xml_properties {
