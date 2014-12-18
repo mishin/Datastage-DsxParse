@@ -412,9 +412,13 @@ sub get_ds_properties {
     my ($param_fields, $link_name) = @_;
     my $OLEType = 'CCustomInput';
     my $rec = get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
+    my %d = (rec => $rec, link_name => $link_name);
+    # debug(1, \%d);
     my $ds_name;
+    my @ds_types = qw/dataset file/;
     for my $rec (@{$rec->{subrecord_body}}) {
-        if ($rec->{Name} eq 'dataset' || $rec->{Name} eq 'file') {
+
+        if (any { $rec->{Name} eq $_ } @ds_types) {
             $ds_name = from_dsx_2_utf($rec->{Value});
         }
     }
@@ -1717,7 +1721,8 @@ sub get_body_of_records {
     my %d = ();
     @d{'rich_records', 'search_name', 'curr_ref_array'} =
       ($rich_records, $search_name, $curr_ref_array);
-    debug(1, \%d);
+
+    # debug(1, \%d);
 
     #my $orch_code = $curr_ref_array->{'fields'}->{$seach_node};
     return $curr_ref_array;
