@@ -13,6 +13,11 @@ use POSIX qw(strftime);
 use File::Basename;
 use List::Util qw(first max maxstr min minstr reduce shuffle sum);
 use Scalar::Util qw/reftype/;
+use List::MoreUtils qw(any);
+
+#для отладки
+use Devel::ebug;
+
 
 our $VERSION = "0.01";
 use Sub::Exporter -setup => {
@@ -37,6 +42,7 @@ sub parse_dsx {
     my $rich_records        = enrich_records($ref_array_dsrecords);
     my $orchestrate_code =
       get_orchestrate_code($rich_records, 'OrchestrateCode');
+    say '14:40';
     my ($parsed_dsx, $links, $direction, $lines);
     if (defined $orchestrate_code) {
         $parsed_dsx = parse_orchestrate_body($orchestrate_code);
@@ -54,6 +60,7 @@ sub parse_dsx {
         $header_and_job, $header_fields, $rich_records, $parsed_dsx, $links,
         $direction, $lines
       );
+
 
   #итак, все рассичтали, можно рисовать в excel
     my $debug_variable =
@@ -233,7 +240,7 @@ sub get_body_of_stage {
 
     # print Dumper $stage_body;
     say 'link_name: ' . $link_name;
-    my $OLEType = 'CTrxOutput';
+    my $OLEType = 'CTrxOutput';    # qw/CTrxOutput CCustomOutput/;
     my $link_body =
       get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
 
@@ -242,12 +249,14 @@ sub get_body_of_stage {
     my $xml_prop = get_xml_properties($param_fields, $stage_name);
     my ($xml_fields, $table_name);
     my %table_comp = ();
-    say 'ABC1: ';
+
+    # say 'ABC1: ';
     if (defined $xml_prop) {
         $xml_fields = parse_xml_properties($xml_prop);
-        say 'ABC: ';
-         # my $sql = $xml_fields->{Usage}->{SQL}->{UserDefinedSQL}->{Statements};
-   
+
+      # say 'ABC: ';
+      # my $sql = $xml_fields->{Usage}->{SQL}->{UserDefinedSQL}->{Statements};
+
         $table_name = get_table_name($xml_fields);
         $table_name =~ /(?<schema>.*)[.](?<table_name>[^.]+)$/;
         %table_comp = %+;
@@ -306,6 +315,10 @@ sub get_body_of_stage {
     #10.Исходное поле
     my $sourcecolumn = get_source_sql_field($sql_fields, 'SourceColumn');
 
+    #11.Описание
+    my $descriptions = get_source_sql_field($sql_fields, 'Description');
+
+
 #11.Если $sourcecolumn
 #address_insert.STRNAM;address_insert.HOUSE;address_insert.CORP;address_insert.FLAT
 #то нужно разделить строку на число источников
@@ -316,9 +329,9 @@ sub get_body_of_stage {
     # my %prepare_4_show={};
     # print Dumper $sourcecolumn;
     my @show_values = (
-        $project,    $job,              $server, $schema,
-        $table_name, $fields,           $types,  $key,
-        $nullable,   $parsedderivation, $sourcecolumn
+        $project,    $job,              $server,       $schema,
+        $table_name, $fields,           $types,        $key,
+        $nullable,   $parsedderivation, $sourcecolumn, $descriptions
     );
     my $big_array = make_data_4_show(\@show_values, $fields);
 
@@ -469,6 +482,7 @@ sub from_dsx_2_utf {
         $string =~ s#\Q\(A)\E#\n#g;
         $string =~ s#\Q\(9)\E#\t#g;
         $string =~ s#\\([^(])#$1#g;
+        $string =~ s#Searchable\? [YN]##g;
         $string =~ s#\\\((...)\)#chr(hex$1)#gsme;
     }
     return $string;
@@ -574,21 +588,21 @@ sub get_job_name {
 sub get_table_name {
     my ($xml_field) = @_;
     my $table_name = $xml_field->{Usage}->{TableName}->{content};
-    
+
     if (defined $table_name) {
         return uc($table_name);
     }
     say 'sql: ';
     print Dumper $xml_field->{Usage};
-     my $sql = $xml_field->{Usage}->{SQL}->{UserDefinedSQL}->{Statements};
-   
-        # print 'show sql: '.from_dsx_2_utf($sql);
+    my $sql = $xml_field->{Usage}->{SQL}->{UserDefinedSQL}->{Statements};
+
+    # print 'show sql: '.from_dsx_2_utf($sql);
     if (defined $sql) {
-        print 'show sql: '.from_dsx_2_utf($sql);
+        print 'show sql: ' . from_dsx_2_utf($sql);
         print Dumper $xml_field->{Usage}->{SQL};
         return from_dsx_2_utf($sql);
     }
-        return 'no';    
+    return 'no';
 }
 
 sub parse_xml_properties {
@@ -666,55 +680,6 @@ sub pexcel_table_links {
     return $max;
 }
 
-sub show_stage_prop {
-    my ($j, $col, $param_fields, $input_links, $ref_stages_with_types,
-        $suffix, $curr_job)
-      = @_;
-
-    #debug
-    #p $all;
-    #exit;
-    #p $input_links; p $all->{job_pop}->{only_links};#->{only_links};
-    my $accum = 0;
-    my $max   = 0;
-    for my $link_name (@{$input_links}) {
-        my $lname = $link_name . $suffix;    #'_input_links';
-
-# Поле	Тип данных/Длина	Вхождение в ключ	Обязательность
-        my $format =
-          ($suffix eq '_input_links')
-          ? 'source_field_fmt'
-          : 'target_field_fmt';
-
-###we are here ZZZ
-        pexcel_all($j + 2, $col, $param_fields, 'Поле', $format,
-            $curr_job);
-        pexcel_all($j + 2, $col + 1, $param_fields,
-            'Тип данных/Длина',
-            $format, $curr_job);
-        pexcel_all($j + 2, $col + 2, $param_fields,
-            'Преобразование',
-            $format, $curr_job);
-        pexcel_all($j + 2, $col + 3, $param_fields,
-            'Поля-источники', $format, $curr_job);
-        my $fields =
-          get_parsed_fields_from_all($param_fields, $link_name, $curr_job);
-        if (defined $fields) {
-            my $g = pexcel_table_fields_property($j + 2, $col, $param_fields,
-                $fields, $link_name, $curr_job);
-
-            $j     = $j + $g;
-            $accum = $accum + $g;
-        }
-    }
-    $max = max($max, $accum);
-    $col = $col + 5;
-    $j   = $j + 4 + $max;
-
-    return $j;
-
-    # return $max;
-}
 
 sub get_parsed_fields_from_all {
     my ($param_field, $link_name, $OLEType) = @_;
@@ -726,13 +691,14 @@ sub get_parsed_fields_from_all {
     my $in_real_link_name =
       substr($in_link_name, index($in_link_name, ':') + 1);
 
-    #$in_real_link_name ok record
-    my %deb_hash = ();
-    $deb_hash{parsed_fields} = ($param_field->{job_pop}->{parsed_fields});
+#$in_real_link_name ok record
+# my %deb_hash = ();    $deb_hash{parsed_fields} = ($param_field->{job_pop}->{parsed_fields});
 
     # say 'ZZZ';
-    say 'in_real_link_name: ' . $in_real_link_name;
+    say 'in_real_link_name 14:42: ' . $in_real_link_name;
+    say '$OLEType 14:42: ' . $OLEType;
 
+    # debug( 1, $param_field);
     #my $OLEType = 'CTrxOutput';
     my $fields =
       get_body_of_records($param_field, $in_real_link_name, $OLEType);
@@ -747,46 +713,6 @@ sub pexcel_all {
         $param_fields->{ref_formats}->{$format_name});
 }
 
-#
-# New subroutine "fill_excel_inout_links" extracted - Thu Nov 20 15:27:27 2014.
-#
-sub fill_excel_inout_links {
-    my ($param_fields, $col, $j, $stage, $curr_job) = @_;
-
-    #fill_excel_inout_links($param_fields, $col, $j, $stage);
-    my ($col_max, $loc_max) = (0, 0, 0);
-    pexcel_head($j + 6, $col, $param_fields, 'stage_name', $curr_job);
-    pexcel_row($j + 6, $col + 1, $param_fields, $stage->{stage_name},
-        $curr_job);
-    pexcel_head($j + 7, $col, $param_fields, 'operator_name', $curr_job);
-    pexcel_row($j + 7, $col + 1, $param_fields, $stage->{operator_name},
-        $curr_job);
-
-    # my @start_stages = ('copy', 'pxbridge');
-    # my %start_stages_of = map { $_ => 1 } @start_stages;
-
-    for my $link (qw/input_links output_links/) {
-
-        # print "\n\n\nDEbug\n\n";
-        # say 0 + @{ $stage->{$link} };
-        # p $link;
-        # p $stage;
-
-        #если число линков больше нуля
-        if (0 + @{$stage->{$link}} > 0) {
-            $loc_max =
-              pexcel_table_links($j + 9, $col, $param_fields, $stage, $link,
-                $curr_job);
-            $col_max = max($col_max, $loc_max);
-
-            # $col = $col + 5;
-            $col = $col + 4;
-        }
-
-        #}
-    }
-    return ($col_max, $col);    #,$j);
-}
 
 sub get_caption_fields {
     my $caption_fields =
@@ -1757,22 +1683,41 @@ sub parse_orchestrate_body {
 
 sub get_body_of_records {
     my ($param_fields, $search_name, $OLEType) = @_;    #shift;
+
+    # search_name = left
+
     my $rich_records = $param_fields->{job_prop}->{rich_records};
     my $rec;
 
     #my $Identifier = 'ROOT';
     # OLEType "CTrxOutput"
-    # my $seach_node = 'OrchestrateCode';
+    # my $seach_node = 'OrchestrateCode';CCustomOutput
 
     my $curr_ref_array;
+
+
+# if (any { $visitor eq $_ } @names) {
+    my @OLEType = qw/CTrxOutput CCustomOutput $OLEType/;
+
 
     for my $rec1 (@{$rich_records}) {
         my $loc_name = $rec1->{'fields'}->{'Name'};
         my $loc_type = $rec1->{'fields'}->{'OLEType'};
-        if ($loc_name eq $search_name && $loc_type eq $OLEType) {
+
+        if ($loc_name eq $search_name && any { $loc_type eq $_ } @OLEType) {
             $curr_ref_array = $rec1;
+
+            say '$loc_name: ' . $loc_name;
+            say '$loc_type: ' . $loc_type;
+            say '$search_name: ' . $search_name;
+            say '';
         }
     }
+
+    my %d = ();
+    @d{'rich_records', 'search_name', 'curr_ref_array'} =
+      ($rich_records, $search_name, $curr_ref_array);
+    debug(1, \%d);
 
     #my $orch_code = $curr_ref_array->{'fields'}->{$seach_node};
     return $curr_ref_array;
