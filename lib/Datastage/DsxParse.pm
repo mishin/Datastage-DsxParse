@@ -279,6 +279,9 @@ sub get_body_of_stage {
         # [&"TempFilePathDS"] ->  "#TempFilePathDS#spa.ds"
         if (defined $link_name_for_ds) {
             $link_name_for_ds =~ s{\[&\"(.*?)\"\](\w+[.]ds)}{#$1#$2}xg;
+            $link_name_for_ds =~ s{\[&\\"(.*?)\\"\](\w+[.]ds)}{#$1#$2}xg;
+            #[&\"psProjectsPath.ProjectFilePath\"]FICLI_BUSINESS_ACT.ds
+
             $table_name = $link_name_for_ds;
         }
         else {
@@ -587,10 +590,10 @@ sub decode_sql_type {
     my $precicion  = shift;
     my $debug_info = shift;
     my %param_type;
-    @param_type{1, 4, 9, 12, 3, 5, 6, 10, 13, 11} = (
+    @param_type{1, 4, 9, 12, 3, 5, 6, 10, 13, 11,8} = (
         'Char',    'Integer',  'Date',    'VarChar',
         'Decimal', 'SmallInt', 'Unnown6', 'Time',
-        'VarChar', 'Timestamp'
+        'VarChar', 'Timestamp','dfloat'
     );
 
     # CTNUMDOG=12, RESTRUCT_CNT=4, RESTRUCT_END_DATE=9', 'CTNUMDOG=13
