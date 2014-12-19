@@ -47,8 +47,10 @@ sub parse_dsx {
     if (defined $orchestrate_code) {
         $parsed_dsx = parse_orchestrate_body($orchestrate_code);
         $links      = reformat_links($parsed_dsx);
-        $direction  = 'end';
-        $lines      = fill_way_and_links($links, $direction);
+
+# debug (1,$parsed_dsx);
+        $direction = 'end';
+        $lines = fill_way_and_links($links, $direction);
     }
     my %job_prop = ();
     @job_prop{
@@ -162,6 +164,8 @@ sub make_mapping_job {
         }
     }
 
+    # debug (1, \%start_stages_for_mapping);
+
     my $ref_fields = get_header_values();
     for my $field (@{$ref_fields}) {
         $curr_job->write($field->{coord}, $field->{caption},
@@ -224,6 +228,9 @@ sub get_body_of_stage {
     my ($param_fields, $stage_name, $links) = @_;
     my $stage_body;
 
+    # debug (1, $param_fields);
+    say '111 $stage_name: ' . $stage_name;
+
     #my $links=$param_fields;
     #идем по всем стадиям
     for my $loc_stage (@{$links}) {
@@ -262,7 +269,21 @@ sub get_body_of_stage {
         %table_comp = %+;
     }
     else {
-        $table_name = get_ds_properties($param_fields, $link_name);
+
+#Если это Dataset, то его название можно взять из Orcestrate кода!!! и берем его из output_links
+        my $link_name = $stage_body->{'output_links'}[0];
+
+        # [&"TempFilePathDS"] ->  "#TempFilePathDS#spa.ds"
+        $link_name =~ s{\[&\"(.*?)\"\](\w+[.]ds)}{#$1#$2}xg;
+
+        # my $link_name=~ s{\[\&"(\w+)"\](\w+[.]ds)}{#$1#$2}g;
+# $string =~ s#\\([^(])#$1#g;
+
+        $table_name = $link_name;
+
+#get_ds_properties($param_fields, $link_name);
+# $table_name = get_ds_properties_from_orchestrate($param_fields, $link_name);
+# $table_name = get_ds_properties($param_fields, $stage_name);#$link_name);
         $table_comp{table_name} = $table_name;
 
         #значит у нас датасет!!!
@@ -411,12 +432,14 @@ sub make_sql_fields_for_show {
 sub get_ds_properties {
     my ($param_fields, $link_name) = @_;
     my $OLEType = 'CCustomInput';
-    my $records= get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
+    my $records =
+      get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
 
-my %d = ('$records' => $records, link_name => $link_name);
-     debug(1, \%d);
-          print DumpTree( \%d,   '\%d' );
-    
+    my %d = ('$records' => $records, link_name => $link_name);
+
+    # debug(1, \%d);
+    # print DumpTree( \%d,   '\%d' );
+
 
     my $ds_name;
     my @ds_types = qw/dataset file/;
@@ -425,7 +448,12 @@ my %d = ('$records' => $records, link_name => $link_name);
             $ds_name = from_dsx_2_utf($rec->{Value});
         }
     }
-    $ds_name =~ s{(\\\(\d\)0|\\\(\d\))}{}g;
+    if (defined $ds_name) {
+        $ds_name =~ s{(\\\(\d\)0|\\\(\d\))}{}g;
+    }
+    else {
+        $ds_name = $link_name;
+    }
     return $ds_name;
 }
 
@@ -698,10 +726,6 @@ sub get_parsed_fields_from_all {
     my $in_real_link_name =
       substr($in_link_name, index($in_link_name, ':') + 1);
 
-#$in_real_link_name ok record
-# my %deb_hash = ();    $deb_hash{parsed_fields} = ($param_field->{job_pop}->{parsed_fields});
-
-    # say 'ZZZ';
     say 'in_real_link_name 14:42: ' . $in_real_link_name;
     say '$OLEType 14:42: ' . $OLEType;
 
@@ -1591,12 +1615,14 @@ keep
 \w+)
 .v
 |
-\[.*?\]	
 (?<link_name>
+.*?
 \w+.ds
 )
 )'
 }xs;
+
+#\[.*?\]
     while ($body =~ m/$link/g) {
         my %link_param = ();
         $link_param{link_name}  = $+{link_name};
