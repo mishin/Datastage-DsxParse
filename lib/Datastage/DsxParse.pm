@@ -25,6 +25,9 @@ use Sub::Exporter -setup => {
         qw/
           debug
           parse_dsx
+          split_by_header_and_job
+          split_fields_by_new_line
+          get_name_and_body
           /
     ],
 };
@@ -271,15 +274,20 @@ sub get_body_of_stage {
     else {
 
 #Если это Dataset, то его название можно взять из Orcestrate кода!!! и берем его из output_links
-        my $link_name = $stage_body->{'output_links'}[0];
+        my $link_name_for_ds = $stage_body->{'output_links'}[0];
 
         # [&"TempFilePathDS"] ->  "#TempFilePathDS#spa.ds"
-        $link_name =~ s{\[&\"(.*?)\"\](\w+[.]ds)}{#$1#$2}xg;
+        if (defined $link_name_for_ds) {
+            $link_name_for_ds =~ s{\[&\"(.*?)\"\](\w+[.]ds)}{#$1#$2}xg;
+            $table_name = $link_name_for_ds;
+        }
+        else {
+            $table_name = get_ds_properties($param_fields, $link_name);
+        }
 
         # my $link_name=~ s{\[\&"(\w+)"\](\w+[.]ds)}{#$1#$2}g;
 # $string =~ s#\\([^(])#$1#g;
 
-        $table_name = $link_name;
 
 #get_ds_properties($param_fields, $link_name);
 # $table_name = get_ds_properties_from_orchestrate($param_fields, $link_name);
@@ -1855,7 +1863,8 @@ sub split_by_subrecords {
 sub get_name_and_body {
     my $data = shift;
     $data =~ /
-BEGIN[ ]DSJOB\n\s+
+BEGIN[ ]DSJOB
+.*?
 Identifier[ ]"(?<identifier>\w+)"
 .*?
 (?<job_body>
