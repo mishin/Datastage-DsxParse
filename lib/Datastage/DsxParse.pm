@@ -197,7 +197,13 @@ sub make_mapping_job {
 
         #пишем в excel !!
         $curr_job->write_row( 'B' . $rec_fields, $link_body );
-        $new_number_of_records = @{ $$link_body[0] } + 0;
+        # my @fake_empty=
+        my @fake_empty=(); 
+# undef @array;
+$#fake_empty = 20;
+ my $empty_line_coordination= @{ $$link_body[0] } + 0;
+        $curr_job->write_row( 'A' . ($rec_fields+$empty_line_coordination), \@fake_empty ,$ref_formats->{fm_green_empty});
+        $new_number_of_records = @{ $$link_body[0] } + 1;
 
         say '$final_stage_for_draw: ' . $final_stage_for_draw;
     }
@@ -263,8 +269,6 @@ sub get_body_of_stage {
       get_table_ds_file_name( $stage_body, $param_fields, $link_name, $xml_prop,
         $xml_fields );
 
-# my ($link_name_for_ds, $table_name, $xml_fields) = get_table_ds_file_name ($stage_body, $param_fields, $xml_prop, $link_name);
-
     #итак собираем excel
     #
     # ServerName "SDBDS2"
@@ -280,6 +284,9 @@ sub get_body_of_stage {
 
     #3.ПРИЕМНИК ДАННЫХ или сервер
     my $server = $xml_fields->{Connection}->{DataSource}->{content};
+    if ( !defined $server ) {
+        $server = $table_comp{server};
+    }
 
     #4.schema
     my $schema = $table_comp{schema};
@@ -667,7 +674,9 @@ sub get_table_ds_file_name {
          \w+[.]ds
          )         
          /x;
-        %table_comp = %+;
+        %table_comp         = %+;
+        $table_comp{schema} = "#$table_comp{schema}#";
+        $table_comp{server} = 'ДАТАСЕТ';
     }
 
     return %table_comp;
@@ -1055,8 +1064,17 @@ sub set_excel_formats {
       add_fmt_with_color( $workbook, $target_field_fmt, $light_blue_color );
 
     my $green_color = $workbook->set_custom_color( 48, 0, 176, 80 );
-    $formats{fm_green} =
-      add_fmt_with_color( $workbook, $target_field_fmt, $green_color );
+    $formats{fm_green} =      add_fmt_with_color( $workbook, $target_field_fmt, $green_color );
+      
+      $formats{fm_green_empty} =      add_fmt_with_color_fake( $workbook, $target_field_fmt, $grey_color  );
+      # add_fmt_with_color_fake
+      # $fm->copy($target_field_fmt);
+    # $fm->set_bg_color($color);
+    
+# my $fake_fmt=$formats{fm_green};
+# $fake_fmt->set_border(0);#   => 2,
+# $formats{fm_green_empty} =      add_fmt_with_color( $workbook, $target_field_fmt, $fake_fmt );
+# ,'fm_green_empty' ,$fake_fmt
 
     # $hs_name_frmt->set_bg_color($acca_color);
 
@@ -1075,6 +1093,17 @@ sub set_excel_formats {
 
 #my @formats=( $date_fmt, $heading, $num_fmt, $rows_fmt, $url_format,$sql_fmt,$map_fmt );
     return \%formats;
+}
+
+
+
+sub add_fmt_with_color_fake {
+    my ( $workbook, $target_field_fmt, $color ) = @_;
+    my $fm = $workbook->add_format();
+    $fm->copy($target_field_fmt);
+    $fm->set_bg_color($color);
+    $fm->set_border(0);;
+    return $fm;
 }
 
 sub add_fmt_with_color {
