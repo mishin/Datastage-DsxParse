@@ -197,12 +197,15 @@ sub make_mapping_job {
 
         #пишем в excel !!
         $curr_job->write_row( 'B' . $rec_fields, $link_body );
+
         # my @fake_empty=
-        my @fake_empty=(); 
-# undef @array;
-$#fake_empty = 20;
- my $empty_line_coordination= @{ $$link_body[0] } + 0;
-        $curr_job->write_row( 'A' . ($rec_fields+$empty_line_coordination), \@fake_empty ,$ref_formats->{fm_green_empty});
+        my @fake_empty = ();
+
+        # undef @array;
+        $#fake_empty = 20;
+        my $empty_line_coordination = @{ $$link_body[0] } + 0;
+        $curr_job->write_row( 'A' . ( $rec_fields + $empty_line_coordination ),
+            \@fake_empty, $ref_formats->{fm_green_empty} );
         $new_number_of_records = @{ $$link_body[0] } + 1;
 
         say '$final_stage_for_draw: ' . $final_stage_for_draw;
@@ -1064,19 +1067,11 @@ sub set_excel_formats {
       add_fmt_with_color( $workbook, $target_field_fmt, $light_blue_color );
 
     my $green_color = $workbook->set_custom_color( 48, 0, 176, 80 );
-    $formats{fm_green} =      add_fmt_with_color( $workbook, $target_field_fmt, $green_color );
-      
-      $formats{fm_green_empty} =      add_fmt_with_color_fake( $workbook, $target_field_fmt, $grey_color  );
-      # add_fmt_with_color_fake
-      # $fm->copy($target_field_fmt);
-    # $fm->set_bg_color($color);
-    
-# my $fake_fmt=$formats{fm_green};
-# $fake_fmt->set_border(0);#   => 2,
-# $formats{fm_green_empty} =      add_fmt_with_color( $workbook, $target_field_fmt, $fake_fmt );
-# ,'fm_green_empty' ,$fake_fmt
+    $formats{fm_green} =
+      add_fmt_with_color( $workbook, $target_field_fmt, $green_color );
 
-    # $hs_name_frmt->set_bg_color($acca_color);
+    $formats{fm_green_empty} =
+      add_fmt_with_color_fake( $workbook, $target_field_fmt, $grey_color );
 
     @formats{
         'date_fmt', 'heading',          'num_fmt',
@@ -1095,14 +1090,12 @@ sub set_excel_formats {
     return \%formats;
 }
 
-
-
 sub add_fmt_with_color_fake {
     my ( $workbook, $target_field_fmt, $color ) = @_;
     my $fm = $workbook->add_format();
     $fm->copy($target_field_fmt);
     $fm->set_bg_color($color);
-    $fm->set_border(0);;
+    $fm->set_border(0);
     return $fm;
 }
 
