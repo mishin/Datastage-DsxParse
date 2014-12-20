@@ -56,14 +56,18 @@ sub parse_dsx {
     }
     my %job_prop = ();
     @job_prop{
-        'header_and_job', 'header_fields', 'rich_records', 'parsed_dsx',
+         'rich_records', 
         'links',          'direction',     'lines'
       }
       = (
-        $header_and_job, $header_fields, $rich_records, $parsed_dsx, $links,
+     $rich_records,  $links,
         $direction, $lines
       );
 
+# 'header_and_job', 'header_fields',
+    # $header_and_job, $header_fields,
+    # 'parsed_dsx',$parsed_dsx,
+debug (1,\%job_prop);
     #итак, все рассичтали, можно рисовать в excel
     my $debug_variable =
       make_excel_and_fill_header( $file_name, $header_fields, \%job_prop );
