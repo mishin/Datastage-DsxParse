@@ -1487,6 +1487,7 @@ sub calculate_right_way_for_stages {
     }
 
     print DumpTree( \%lines, '$hash_ref_lines and direction: ' . $direction );
+    print DumpTree( $links, '$links ' );
     return ( \%lines );
 }
 
