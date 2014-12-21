@@ -1,3 +1,15 @@
+#################################################################
+#### STAGE: CLIENT_BCE
+## Operator
+copy
+## General options
+[ident('CLIENT_BCE')]
+## Inputs
+0< [] 'T106:L119.v'
+## Outputs
+0>| [ds] '[&\"psProjectsPath.ProjectFilePath\"]FICLI_IS_CLIENT_BCE.ds'
+;
+
 'L129.ADDRESS_COUNTRY_CODE',
 SourceColumn = L129.ADDRESS_COUNTRY_CODE
 
