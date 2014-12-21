@@ -55,15 +55,14 @@ sub parse_dsx {
         $lines = fill_way_and_links( $links, $direction );
     }
     my %job_prop = ();
-    @job_prop{
-         'rich_records', 
-        'links',          'direction',     'lines'
-      }
-      = (
-     $rich_records,  $links,
-        $direction, $lines
-      );
-
+ @job_prop{
+'header_and_job', 'header_fields', 'rich_records', 'parsed_dsx',
+'links', 'direction', 'lines'
+}
+= (
+$header_and_job, $header_fields, $rich_records, $parsed_dsx, $links,
+$direction, $lines
+);
 # 'header_and_job', 'header_fields',
     # $header_and_job, $header_fields,
     # 'parsed_dsx',$parsed_dsx,
