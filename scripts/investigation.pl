@@ -1,3 +1,29 @@
+my $lines          = $param_fields->{job_prop}->{lines};
+
+    my $parsedderivation =
+      get_source_sql_field_parsed($sql_fields, 'ParsedDerivation',$param_fields);
+get_source_sql_field_parsed
+
+my $sql_fields = get_sql_fields($param_fields, $link_name);
+    
+    #6.fields
+    my $fields = get_source_sql_field($sql_fields, 'Name');
+
+    #10.Формула
+    my $parsedderivation =
+      get_source_sql_field($sql_fields, 'ParsedDerivation');
+      
+      
+    #10.Исходное поле
+    my $sourcecolumn = get_source_sql_field($sql_fields, 'SourceColumn');
+    
+        for my $key (keys %{$lines}) {
+        my @arr = @{$lines->{$key}};
+        for my $stage_name (keys %{$arr[0]}) {
+            $start_stages_for_mapping{$stage_name}++;
+        }
+    }
+
 #################################################################
 #### STAGE: CLIENT_BCE
 ## Operator
