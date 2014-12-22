@@ -44,16 +44,18 @@ sub parse_dsx {
     my $rich_records        = enrich_records($ref_array_dsrecords);
     my $orchestrate_code =
       get_orchestrate_code($rich_records, 'OrchestrateCode');
-    say '14:40';
+
+    # say '14:40';
     my ($parsed_dsx, $links, $direction, $lines);
     if (defined $orchestrate_code) {
         $parsed_dsx = parse_orchestrate_body($orchestrate_code);
         $links      = reformat_links($parsed_dsx);
 
-    
+
         $direction = 'end';
         $lines = fill_way_and_links($links, $direction);
-             # debug(1, $lines);
+
+        # debug(1, $lines);
     }
     my %job_prop = ();
     @job_prop{
@@ -70,12 +72,13 @@ sub parse_dsx {
     # $header_and_job, $header_fields,
     # 'parsed_dsx',$parsed_dsx,
 # debug (1,\%job_prop);
-my %deb=();
-@deb{'$links', '$lines'}=($links, $lines);
+    my %deb = ();
+    @deb{'$links', '$lines'} = ($links, $lines);
+
   #итак, все рассичтали, можно рисовать в excel
     my $debug_variable =
       make_excel_and_fill_header($file_name, $header_fields, \%job_prop);
-    return \%deb;#$links $lines;#$debug_variable;    #$header_and_job;
+    return \%deb;    #$links $lines;#$debug_variable;    #$header_and_job;
 }
 
 sub make_excel_and_fill_header {
@@ -206,11 +209,11 @@ sub make_mapping_job {
         #пишем в excel !!
         $curr_job->write_row('B' . $rec_fields, $link_body);
 
-        
-        # my @fake_empty = ();
-        # $#fake_empty = 20;
-        # my $empty_line_coordination = @{$$link_body[0]} + 0;
-        # $curr_job->write_row('A' . ($rec_fields + $empty_line_coordination),       \@fake_empty, $ref_formats->{fm_green_empty});
+
+# my @fake_empty = ();
+# $#fake_empty = 20;
+# my $empty_line_coordination = @{$$link_body[0]} + 0;
+# $curr_job->write_row('A' . ($rec_fields + $empty_line_coordination),       \@fake_empty, $ref_formats->{fm_green_empty});
         $new_number_of_records = @{$$link_body[0]} + 0;
 
         say '$final_stage_for_draw: ' . $final_stage_for_draw;
@@ -309,12 +312,7 @@ copy
 
     # print Dumper $stage_body;
     say 'link_name: ' . $link_name;
-    my $OLEType = 'CTrxOutput';    # qw/CTrxOutput CCustomOutput/;
-    my $link_body =
-      get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
 
-    #sql поля есть
-    my $sql_fields = get_sql_fields($link_body);
 
     my $xml_prop = get_xml_properties($param_fields, $stage_name);
     my $xml_fields = parse_xml_properties($xml_prop);
@@ -351,6 +349,9 @@ copy
     #5.table
     my $table_name = $table_comp{table_name};
 
+    #sql поля есть
+    my $sql_fields = get_sql_fields($param_fields, $link_name);
+
     #6.fields
     my $fields = get_source_sql_field($sql_fields, 'Name');
 
@@ -370,10 +371,14 @@ copy
 
     #10.Формула
     my $parsedderivation =
-      get_source_sql_field($sql_fields, 'ParsedDerivation');
+      get_source_sql_field($sql_fields, 'ParsedDerivation', $param_fields);
+
+    # get_source_sql_field($sql_fields, 'ParsedDerivation');
 
     #10.Исходное поле
-    my $sourcecolumn = get_source_sql_field($sql_fields, 'SourceColumn');
+    my $sourcecolumn =
+      get_source_sql_field_parsed($sql_fields, 'SourceColumn', $param_fields,
+        $stage_name);
 
     #11.Описание
     my $descriptions = get_source_sql_field($sql_fields, 'Description');
@@ -396,6 +401,83 @@ copy
 
     # print Dumper $big_array;
     return $big_array;
+}
+
+
+sub get_source_sql_field_parsed {
+    my ($sql_fields, $field_name, $param_fields, $stage_name) = @_;
+
+    #$field_name='ParsedDerivation'
+    my @sql_user_fiendly = ();
+    for my $sql_field (@{$sql_fields}) {
+        my ($cnt, $src_fields) =
+          is_multiple_source($sql_field->{'SourceColumn'});
+        if ($cnt > 1) {
+            for my $field (@{$src_fields}) {
+                if ($field_name eq 'SourceColumn') {
+
+#Если это поле источник, то заполняем каждое поле в отдельности
+                    push @sql_user_fiendly, from_dsx_2_utf($field);
+                    debug_parsed('1', $field, $stage_name, $param_fields);
+
+# say 'debug1 !! $field: ' . $field.' link: '.get_link_name_from_parsed($field);
+                }
+                else {
+
+#просто множим число записей по числу полей источников
+                    push @sql_user_fiendly,
+                      from_dsx_2_utf($sql_field->{$field_name});
+                }
+            }
+        }
+        else {
+
+#если источником является одно поле, то все падает сюда!
+            push @sql_user_fiendly, from_dsx_2_utf($sql_field->{$field_name});
+            debug_parsed('2', $sql_field->{$field_name},
+                $stage_name, $param_fields);
+
+            # say 'debug2 !! $field: ' . $sql_field->{$field_name}
+            # if defined $sql_field->{$field_name};
+        }
+    }
+    return \@sql_user_fiendly;
+}
+
+sub debug_parsed {
+    my $mark         = shift;
+    my $field        = shift;
+    my $stage_name   = shift;
+    my $param_fields = shift;
+    my $lines        = $param_fields->{job_prop}->{lines};
+    my $curr_line    = $lines->{$stage_name};
+    say '$curr_line: ' . $curr_line;
+    print Dumper $curr_line;
+
+    # for my $key (keys %{$lines}) {
+    # my @arr = @{$lines->{$key}};
+    # for my $stage_name (keys %{$arr[0]}) {
+    # $start_stages_for_mapping{$stage_name}++;
+    # }
+    # }
+    say 'debug' 
+      . $mark
+      . ' !! $field: '
+      . $field
+      . ' $stage_name: '
+      . $stage_name
+      . ' link: '
+      . get_link_name_from_parsed($field)
+      if defined $field;
+}
+
+# sub add_to_array
+
+sub get_link_name_from_parsed {
+    my $in_link_name = shift;    # 'l1.GR1576';
+    my $in_real_link_name =
+      substr($in_link_name, 0, index($in_link_name, '.'));
+    return $in_real_link_name;
 }
 
 sub get_source_sql_field {
@@ -765,6 +847,7 @@ sub get_table_ds_file_name {
 #это файл
         }
         elsif ($type eq 'copy') {
+
             # say 'ZZZ_14_52';
 
 #это датасет
@@ -837,7 +920,11 @@ sub get_xml_properties {
 }
 
 sub get_sql_fields {
-    my ($link_body) = @_;
+    my ($param_fields, $link_name) = @_;
+
+    my $OLEType = 'CTrxOutput';    # qw/CTrxOutput CCustomOutput/;
+    my $link_body =
+      get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
     my $sql_fields  = $link_body->{subrecord_body};
     my @sql_records = ();
     for my $rec (@{$link_body->{subrecord_body}}) {
@@ -1494,6 +1581,8 @@ sub fill_way_and_links {
 
     #    say "number of links: $cnt_stages";
     #хэш стейджей с объектами
+    # debug(1, $links);
+
     my %stages_body;
     for my $stage (@{$links}) {
         $stages_body{$stage->{stage_name}} = $stage;
@@ -1517,6 +1606,8 @@ sub fill_way_and_links {
         }
         $start_stages_name{$stage->{stage_name}} = \%link_collection;
     }
+
+    # debug(1,\%start_stages_name);
     my ($lines) =
       calculate_right_way_for_stages($direction, $links, \%a_few_stages,
         \%start_stages_name);
@@ -1868,7 +1959,7 @@ sub parse_operator_options {
 
     $stage =~ m{
           (?<stage_body>
-\#\#\#\#[ ]STAGE:[ ](?<stage_name>\w+)[\n]
+\#\#\#\#[ ]STAGE:[ ](?<stage_name>[\w.]+)[\n]
 \#\#[ ]Operator[\n]
 (?<operator_name>\w+)[\n]
 \#\#[ ]Operator[ ]options
@@ -1913,7 +2004,7 @@ sub make_orchestrate_regexp {
 
     my $ORCHESTRATE_BODY_RX = qr{
 (?<stage_body>
-\#\#\#\#[ ]STAGE:[ ](?<stage_name>\w+)[\n]
+\#\#\#\#[ ]STAGE:[ ](?<stage_name>[\w.]+)[\n]
 \#\#[ ]Operator[\n]
 (?<operator_name>\w+)[\n]
 .*?
