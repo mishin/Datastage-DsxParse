@@ -4,10 +4,8 @@ my $lines          = $param_fields->{job_prop}->{lines};
       get_source_sql_field_parsed($sql_fields, 'ParsedDerivation',$param_fields);
 get_source_sql_field_parsed
 
-my $sql_fields = get_sql_fields($param_fields, $link_name);
-    
-    #6.fields
-    my $fields = get_source_sql_field($sql_fields, 'Name');
+     my $sql_fields = get_sql_fields($param_fields, $link_name);
+     my $fields = get_source_sql_field($sql_fields, 'Name');
 
     #10.Формула
     my $parsedderivation =
