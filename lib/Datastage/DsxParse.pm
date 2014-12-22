@@ -50,9 +50,10 @@ sub parse_dsx {
         $parsed_dsx = parse_orchestrate_body($orchestrate_code);
         $links      = reformat_links($parsed_dsx);
 
-        # debug(1, $parsed_dsx);
+    
         $direction = 'end';
         $lines = fill_way_and_links($links, $direction);
+             # debug(1, $lines);
     }
     my %job_prop = ();
     @job_prop{
@@ -69,10 +70,12 @@ sub parse_dsx {
     # $header_and_job, $header_fields,
     # 'parsed_dsx',$parsed_dsx,
 # debug (1,\%job_prop);
+my %deb=();
+@deb{'$links', '$lines'}=($links, $lines);
   #итак, все рассичтали, можно рисовать в excel
     my $debug_variable =
       make_excel_and_fill_header($file_name, $header_fields, \%job_prop);
-    return $debug_variable;    #$header_and_job;
+    return \%deb;#$links $lines;#$debug_variable;    #$header_and_job;
 }
 
 sub make_excel_and_fill_header {
@@ -203,15 +206,12 @@ sub make_mapping_job {
         #пишем в excel !!
         $curr_job->write_row('B' . $rec_fields, $link_body);
 
-        # my @fake_empty=
-        my @fake_empty = ();
-
-        # undef @array;
-        $#fake_empty = 20;
-        my $empty_line_coordination = @{$$link_body[0]} + 0;
-        $curr_job->write_row('A' . ($rec_fields + $empty_line_coordination),
-            \@fake_empty, $ref_formats->{fm_green_empty});
-        $new_number_of_records = @{$$link_body[0]} + 1;
+        
+        # my @fake_empty = ();
+        # $#fake_empty = 20;
+        # my $empty_line_coordination = @{$$link_body[0]} + 0;
+        # $curr_job->write_row('A' . ($rec_fields + $empty_line_coordination),       \@fake_empty, $ref_formats->{fm_green_empty});
+        $new_number_of_records = @{$$link_body[0]} + 0;
 
         say '$final_stage_for_draw: ' . $final_stage_for_draw;
     }
