@@ -177,7 +177,6 @@ sub make_mapping_job {
         }
     }
 
-    # debug (1, \%start_stages_for_mapping);
 
     my $ref_fields = get_header_values();
     for my $field (@{$ref_fields}) {
@@ -196,17 +195,24 @@ sub make_mapping_job {
         $ref_formats->{rows_fmt}
     );
 
-    my $j                     = 3;
-    my $col                   = 7;
-    my $links                 = $param_fields->{job_prop}->{links};
+    my $j     = 3;
+    my $col   = 7;
+    my $links = $param_fields->{job_prop}->{links};
+    my %db    = (
+        'links'                      => $links,
+        '\%start_stages_for_mapping' => \%start_stages_for_mapping
+    );
+    debug(1, \%db);
     my @fill_excel            = ();
     my $new_number_of_records = 0;
     my $rec_fields            = 3;
+
     for my $final_stage_for_draw (keys %start_stages_for_mapping) {
         $rec_fields = $rec_fields + $new_number_of_records;
         say $rec_fields;
         my $link_body =
           get_body_of_stage($param_fields, $final_stage_for_draw, $links);
+        say ' $final_stage_for_draw: ' . $final_stage_for_draw;
 
         #пишем в excel !!
         $curr_job->write_row('B' . $rec_fields, $link_body);
@@ -476,9 +482,10 @@ sub debug_parsed {
 
         my $parse_and_source =
           get_source_and_derivation($param_fields, $link_name, $orig_fld);
-        say 'ParsedDerivation: ' . $parse_and_source->{parsed_derivation};
-        say 'SourceColumn:' . $parse_and_source->{source_column};
-
+        if (defined $parse_and_source->{parsed_derivation}) {
+            say 'ParsedDerivation: ' . $parse_and_source->{parsed_derivation};
+            say 'SourceColumn:' . $parse_and_source->{source_column};
+        }
         my @strange_array       = ();
         my %check_strange_array = ();
 
@@ -814,6 +821,7 @@ sub from_dsx_2_utf {
         $string =~ s#\\([^(])#$1#g;
         $string =~ s#Searchable\? [YN]##g;
         $string =~ s#\\\((...)\)#chr(hex$1)#gsme;
+        $string =~ s#\\\((....)\)#chr(hex$1)#gsme;
     }
     return $string;
 }
@@ -1709,7 +1717,7 @@ sub fill_way_and_links {
     my ($links, $direction) = @_;
 
   # my $links        = $all->{job_pop}->{only_links}->{only_stages_and_links};
-    my @start_stages    = qw/copy pxbridge import export/;
+    my @start_stages    = qw/copy pxbridge import export dscapiop/;
     my %start_stages_of = map { $_ => 1 } @start_stages;
     my $max             = 0;
     my $links_type = ($direction eq 'start') ? 'input_links' : 'output_links';
