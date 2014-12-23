@@ -155,7 +155,7 @@ sub get_worksheet_by_name {
 sub make_mapping_job {
     my ($param_fields) = @_;
 
-    debug(1, $param_fields);
+    # debug(1, $param_fields);
 
     my $workbook      = $param_fields->{workbook};
     my $loc_hash_prop = $param_fields->{job_prop};
@@ -468,15 +468,18 @@ sub debug_parsed {
 
         # say '$curr_line: ' . $curr_line;
         # print Dumper $curr_line;
-        my $OLEType = 'CTrxOutput';    # qw/CTrxOutput CCustomOutput/;
+        # my $OLEType = 'CTrxOutput';    # qw/CTrxOutput CCustomOutput/;
         my $link_body =
-          get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
+          get_parsed_fields_from_all($param_fields, $link_name, 'CTrxOutput');
 
-        my $fields =
-          get_parsed_any($param_fields, $link_name, $orig_fld, $link_body);
-        say 'ParsedDerivation: ' . $fields->{ParsedDerivation};
-        say 'SourceColumn:' . $fields->{SourceColumn};
+# my $fields =          get_parsed_any($param_fields, $link_name, $orig_fld, $link_body);
 
+        my $parse_and_source =
+          get_source_and_derivation($param_fields, $link_name, $orig_fld);
+        say 'ParsedDerivation: ' . $parse_and_source->{parsed_derivation};
+        say 'SourceColumn:' . $parse_and_source->{source_column};
+
+# parsed_derivation','source_column
         for my $stage_hash (@{$curr_line}) {
 
             # my $stage_name = values %{$stage_hash};
@@ -508,6 +511,21 @@ sub debug_parsed {
     }
 }
 
+sub get_source_and_derivation {
+    my ($param_fields, $link_name, $orig_fld) = @_;
+    my $link_body =
+      get_parsed_fields_from_all($param_fields, $link_name, 'CTrxOutput');
+
+    my $fields =
+      get_parsed_any($param_fields, $link_name, $orig_fld, $link_body);
+    my $parsed_derivation = $fields->{ParsedDerivation};
+    my $source_column     = $fields->{SourceColumn};
+    my %parse_and_source  = ();
+    @parse_and_source{'parsed_derivation', 'source_column'} =
+      ($parsed_derivation, $source_column);
+    return \%parse_and_source;
+}
+
 sub get_parsed_constraint_from_link {
     my ($param_fields, $link_name, $param, $link_body) = @_;
 
@@ -522,7 +540,8 @@ sub get_parsed_constraint_from_link {
 
     if (defined $link_body->{fields}->{ParsedConstraint}) {
         print DumpTree($link_body, '$link_body');
-        debug(1, $link_body);
+
+        # debug(1, $link_body);
     }
 
     # my $sql_fields  = $link_body->{subrecord_body};
