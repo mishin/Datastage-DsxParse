@@ -493,28 +493,15 @@ sub debug_parsed {
             my ($cnt, $src_fields) =
               is_multiple_source($parse_and_source->{'source_column'});
             if ($cnt > 1) {
-                for my $ff (@{$src_fields}) {
-                    my ($loc_link, $loc_fld) = split(/[.]/, $ff);
-                    my $loc_link_name = $loc_stage_name . ':' . $loc_link;
-                    my $loc_parse_and_source =
-                      get_source_and_derivation($param_fields, $loc_link_name,
-                        $orig_fld);
-                    print Dumper $loc_parse_and_source;
-                }
+                my $derivations =
+                  get_multiple_derivation($src_fields, $param_fields,
+                    $loc_stage_name, $orig_fld);
+                $check_strange_array{$loc_stage_name . ': ' . $field} =
+                  $derivations;
             }
-
-# my @fielsd_from_source
-# if $check_strange_array{$parse_and_source}{
-# push @strange_array,$parse_and_source;
-# }
-           # print DumpTree($stage_hash,           '$stage_hash');
-           # if (defined $field) {
-           # my $fields = get_parsed_any($param_fields, $link_name,$orig_fld);
-# say 'ParsedDerivation: '.$fields->{ParsedDerivation};
-# say 'SourceColumn:'. $fields->{SourceColumn};
-            # # print Dumper $fields;
-            # }
         }
+        print Dumper \%check_strange_array;
+
 
         my $param = 'ParsedConstraint';
         get_parsed_constraint_from_link($param_fields, $link_name, $param,
@@ -531,6 +518,25 @@ sub debug_parsed {
         say '';
 
     }
+}
+
+sub get_multiple_derivation {
+    my ($src_fields, $param_fields, $loc_stage_name, $orig_fld) = @_;
+    my @fields_and_derivations = ();
+    for my $ff (@{$src_fields}) {
+        my ($loc_link, $loc_fld) = split(/[.]/, $ff);
+        my $loc_link_name = $loc_stage_name . ':' . $loc_link;
+        my $loc_parse_and_source =
+          get_source_and_derivation($param_fields, $loc_link_name, $orig_fld);
+        my %loc_param = ();
+        @loc_param{'ff', 'loc_link', 'loc_fld', 'loc_parse_and_source'} =
+          ($ff, $loc_link, $loc_fld, $loc_parse_and_source);
+        push @fields_and_derivations, \%loc_param;
+
+        # $fields_and_derivations{$ff}=$loc_parse_and_source;
+        # print Dumper $loc_parse_and_source;
+    }
+    return \@fields_and_derivations;
 }
 
 sub get_source_and_derivation {
