@@ -479,12 +479,34 @@ sub debug_parsed {
         say 'ParsedDerivation: ' . $parse_and_source->{parsed_derivation};
         say 'SourceColumn:' . $parse_and_source->{source_column};
 
+        my @strange_array       = ();
+        my %check_strange_array = ();
+
 # parsed_derivation','source_column
         for my $stage_hash (@{$curr_line}) {
+            my $loc_stage_name = (%{$stage_hash})[0];
+            say '$loc_stage_name: ' . (%{$stage_hash})[0];
 
-            # my $stage_name = values %{$stage_hash};
-            say '$stage_name: ' . (%{$stage_hash})[0];
+            my $parse_and_source =
+              get_source_and_derivation($param_fields, $link_name, $orig_fld);
+            $check_strange_array{$loc_stage_name} = $parse_and_source;
+            my ($cnt, $src_fields) =
+              is_multiple_source($parse_and_source->{'source_column'});
+            if ($cnt > 1) {
+                for my $ff (@{$src_fields}) {
+                    my ($loc_link, $loc_fld) = split(/[.]/, $ff);
+                    my $loc_link_name = $loc_stage_name . ':' . $loc_link;
+                    my $loc_parse_and_source =
+                      get_source_and_derivation($param_fields, $loc_link_name,
+                        $orig_fld);
+                    print Dumper $loc_parse_and_source;
+                }
+            }
 
+# my @fielsd_from_source
+# if $check_strange_array{$parse_and_source}{
+# push @strange_array,$parse_and_source;
+# }
            # print DumpTree($stage_hash,           '$stage_hash');
            # if (defined $field) {
            # my $fields = get_parsed_any($param_fields, $link_name,$orig_fld);
