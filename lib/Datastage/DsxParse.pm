@@ -443,37 +443,48 @@ sub debug_parsed {
     my $field        = shift;
     my $stage_name   = shift;
     my $param_fields = shift;
-    my $lines        = $param_fields->{job_prop}->{lines};
-    my $curr_line    = $lines->{$stage_name};
+    if ( defined $field ) {
+        my $lines     = $param_fields->{job_prop}->{lines};
+        my $curr_line = $lines->{$stage_name};
 
-    # say '$curr_line: ' . $curr_line;
-    print Dumper $curr_line;
+        my $fixed_length = 40;
+        say '#' x $fixed_length;
+        my $string = "# DEBUG \$field:  $field";
+        $string .= ' ' x ( $fixed_length - length $string );
+        say $string. '#';
 
-    for my $stage_hash ( @{$curr_line} ) {
-        my $stage_name = keys %{$stage_hash};
-        if ( defined $field ) {
-            my $link_name =
-              $stage_name . ':' . get_link_name_from_parsed($field);
-            my $fields = get_parsed_any( $param_fields, $link_name );
-            print Dumper $fields;
+#say reverse(sprintf("%20s", "" . reverse( "# DEBUG \$field:  $field#")));
+#say printf("%-20s", "# DEBUG \$field : $field  #");#"# DEBUG \$field : $fiel  #";
+        say '#' x $fixed_length;
+
+        # say '$curr_line: ' . $curr_line;
+        print Dumper $curr_line;
+
+        for my $stage_hash ( @{$curr_line} ) {
+            my $stage_name = keys %{$stage_hash};
+            if ( defined $field ) {
+                my $link_name =
+                  $stage_name . ':' . get_link_name_from_parsed($field);
+                my $fields = get_parsed_any( $param_fields, $link_name );
+                print Dumper $fields;
+            }
         }
-    }
 
-    # for my $key (keys %{$lines}) {
-    # my @arr = @{$lines->{$key}};
-    # for my $stage_name (keys %{$arr[0]}) {
-    # $start_stages_for_mapping{$stage_name}++;
-    # }
-    # }
-    say 'debug'
-      . $mark
-      . ' !! $field: '
-      . $field
-      . ' $stage_name: '
-      . $stage_name
-      . ' link: '
-      . get_link_name_from_parsed($field)
-      if defined $field;
+        # for my $key (keys %{$lines}) {
+        # my @arr = @{$lines->{$key}};
+        # for my $stage_name (keys %{$arr[0]}) {
+        # $start_stages_for_mapping{$stage_name}++;
+        # }
+        # }
+        say 'debug'
+          . $mark
+          . ' !! $field: '
+          . $field
+          . ' $stage_name: '
+          . $stage_name
+          . ' link: '
+          . get_link_name_from_parsed($field);
+    }
 }
 
 sub get_parsed_any {
