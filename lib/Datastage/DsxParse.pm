@@ -15,6 +15,8 @@ use List::Util qw(first max maxstr min minstr reduce shuffle sum);
 use Scalar::Util qw/reftype/;
 use List::MoreUtils qw(any);
 
+# use Data::Dumper::Simple;
+
 #для отладки
 #use Devel::ebug;
 
@@ -212,10 +214,12 @@ sub make_mapping_job {
 
     for my $final_stage_for_draw (keys %start_stages_for_mapping) {
         $rec_fields = $rec_fields + $new_number_of_records;
-        say $rec_fields;
+
+        # say $rec_fields;
         my $link_body =
           get_body_of_stage($param_fields, $final_stage_for_draw, $links);
-        say ' $final_stage_for_draw: ' . $final_stage_for_draw;
+
+        # say ' $final_stage_for_draw: ' . $final_stage_for_draw;
 
         #пишем в excel !!
         $curr_job->write_row('B' . $rec_fields, $link_body);
@@ -226,7 +230,7 @@ sub make_mapping_job {
 # $curr_job->write_row('A' . ($rec_fields + $empty_line_coordination),       \@fake_empty, $ref_formats->{fm_green_empty});
         $new_number_of_records = @{$$link_body[0]} + 0;
 
-        say '$final_stage_for_draw: ' . $final_stage_for_draw;
+        # say '$final_stage_for_draw: ' . $final_stage_for_draw;
     }
 
     my $stage_name = 'address_insert';
@@ -388,18 +392,14 @@ copy
       get_source_sql_field_parsed($sql_fields, 'SourceColumn', $param_fields,
         $stage_name);
 
-    #11.Описание
-    my $descriptions = get_source_sql_field($sql_fields, 'Description');
-
-#11.Если $sourcecolumn
+#10.Если $sourcecolumn
 #address_insert.STRNAM;address_insert.HOUSE;address_insert.CORP;address_insert.FLAT
 #то нужно разделить строку на число источников
 
-    #сделаем рефакторинг
-    #пусть хэш указывает нам что делать,
-    #даже не так, хеш не нужен
-    # my %prepare_4_show={};
-    # print Dumper $sourcecolumn;
+    #11.Описание
+    my $descriptions = get_source_sql_field($sql_fields, 'Description');
+
+
     my @show_values = (
         $project,    $job,              $server,       $schema,
         $table_name, $fields,           $types,        $key,
@@ -426,8 +426,6 @@ sub get_source_sql_field_parsed {
 #Если это поле источник, то заполняем каждое поле в отдельности
                     push @sql_user_fiendly, from_dsx_2_utf($field);
                     debug_parsed('1', $field, $stage_name, $param_fields);
-
-# say 'debug1 !! $field: ' . $field.' link: '.get_link_name_from_parsed($field);
                 }
                 else {
 
@@ -443,12 +441,32 @@ sub get_source_sql_field_parsed {
             push @sql_user_fiendly, from_dsx_2_utf($sql_field->{$field_name});
             debug_parsed('2', $sql_field->{$field_name},
                 $stage_name, $param_fields);
-
-            # say 'debug2 !! $field: ' . $sql_field->{$field_name}
-            # if defined $sql_field->{$field_name};
         }
     }
     return \@sql_user_fiendly;
+}
+
+sub show_variable {
+    my ($value, $name) = @_;
+    my $fixed_length = 40;
+
+    #say '#' x $fixed_length;
+    my $string = "# DEBUG $name:  $value";
+    $string .= ' ' x ($fixed_length - length($string) - 1);
+    say $string. '#';
+    say '#' x $fixed_length;
+
+    #say '';
+}
+
+sub debug_show_field_and_link {
+    my ($orig_fld, $orig_link) = @_;
+    if (defined $orig_fld) {
+        show_variable($orig_fld, '$orig_fld');
+    }
+    if (defined $orig_link) {
+        show_variable($orig_link, '$orig_link');
+    }
 }
 
 sub debug_parsed {
@@ -459,79 +477,162 @@ sub debug_parsed {
     if (defined $field) {
         my $links = $param_fields->{job_prop}->{links};
         my ($orig_link, $orig_fld) = split(/[.]/, $field);
-
-      # my $link_name = $stage_name . ':' . get_link_name_from_parsed($field);
         my $link_name = $stage_name . ':' . $orig_link;
         my $lines     = $param_fields->{job_prop}->{lines};
         my $curr_line = $lines->{$stage_name};
+        debug_show_field_and_link($orig_fld, $orig_link);
 
-        my $fixed_length = 40;
-        say '';
-        say '#' x $fixed_length;
-        my $string = "# DEBUG \$orig_fld:  $orig_fld";
-        $string .= ' ' x ($fixed_length - length($string) - 1);
-        say $string. '#';
-
-#say reverse(sprintf("%20s", "" . reverse( "# DEBUG \$field:  $field#")));
-#say printf("%-20s", "# DEBUG \$field : $field  #");#"# DEBUG \$field : $fiel  #";
-        say '#' x $fixed_length;
-
-        # say '$curr_line: ' . $curr_line;
-        # print Dumper $curr_line;
-        # my $OLEType = 'CTrxOutput';    # qw/CTrxOutput CCustomOutput/;
         my $link_body =
           get_parsed_fields_from_all($param_fields, $link_name, 'CTrxOutput');
-
-# my $fields =          get_parsed_any($param_fields, $link_name, $orig_fld, $link_body);
 
         my $parse_and_source =
           get_source_and_derivation($param_fields, $link_name, $orig_fld);
         if (defined $parse_and_source->{parsed_derivation}) {
+
+            # say Dumper $parse_and_source;
             say 'ParsedDerivation: ' . $parse_and_source->{parsed_derivation};
-            say 'SourceColumn:' . $parse_and_source->{source_column};
+
+# сложные случаи, где SourceColumn:=@INROWNUM будем рассматривать после того, как завершим дело с простыми случаями обычными l2.GR2198
+            say 'SourceColumn:' . $parse_and_source->{source_column}
+              if defined $parse_and_source->{source_column};
         }
-        my @strange_array       = ();
-        my %check_strange_array = ();
+
+        my $deriv =
+          get_deriv_from_all($curr_line, $links, $orig_link, $param_fields,
+            $link_name, $orig_fld, $parse_and_source);
+
+        show_parsed_constraint(
+            $param_fields, $link_name, $link_body, $mark,
+            $orig_fld,     $orig_link, $stage_name
+        );
+    }
+}
+
+
+sub get_deriv_from_all {
+    my ($curr_line, $links, $orig_link, $param_fields, $link_name, $orig_fld,
+        $parse_and_source)
+      = @_;
+    my %check_strange_array = ();
+    my @collect_derivations = ();
 
 # parsed_derivation','source_column
-        for my $stage_hash (@{$curr_line}) {
-            my $loc_stage_name = (%{$stage_hash})[0];
-            say '$loc_stage_name: ' . (%{$stage_hash})[0];
+    for my $stage_hash (@{$curr_line}) {
+        for my $loc_stage_name (keys %{$stage_hash}) {
 
-#выведем линки, принадлежащие стейджу
-            my $stage_and_links = get_stage($links, $stage_name);
-            print Dumper $stage_and_links;
-            my $parse_and_source =
-              get_source_and_derivation($param_fields, $link_name, $orig_fld);
-            $check_strange_array{$loc_stage_name} = $parse_and_source;
-            my ($cnt, $src_fields) =
-              is_multiple_source($parse_and_source->{'source_column'});
-            if ($cnt > 1) {
-                my $derivations =
-                  get_multiple_derivation($src_fields, $param_fields,
-                    $loc_stage_name, $orig_fld);
-                $check_strange_array{$loc_stage_name . ': ' . $field} =
-                  $derivations;
+#а, если стейджей несколько, что это не верно!!
+
+#выведем линки, принадлежащие стейджу здесь мы по сути ищем имя линка!!
+            my $stage_and_links = get_stage($links, $loc_stage_name);
+            my $loc_link_name = $loc_stage_name . ':' . $orig_link;
+            for my $in_suffix (qw/input_links output_links/) {
+                for my $in_link_name (@{$stage_and_links->{$in_suffix}}) {
+                    if ($loc_link_name eq $in_link_name) {
+
+                        if (defined $parse_and_source->{parsed_derivation}) {
+
+          # say Dumper $parse_and_source;
+          # say 'ParsedDerivation: ' . $parse_and_source->{parsed_derivation};
+
+# сложные случаи, где SourceColumn:=@INROWNUM будем рассматривать после того, как завершим дело с простыми случаями обычными l2.GR2198
+                            if (defined $parse_and_source->{source_column}) {
+                                my $loc_deriv;
+
+         # say 'SourceColumn:' . $parse_and_source->{source_column}          ;
+                                my ($loc_orig_link, $loc_orig_fld) =
+                                  split(/[.]/,
+                                    $parse_and_source->{source_column});
+                                say '$loc_stage_name: ' . $loc_stage_name;
+                                say
+                                  'линки совпали, дампим!! выводим 2-й уровень ссылок на переменные';
+                                debug_show_field_and_link($loc_orig_fld,
+                                    $loc_orig_link);
+                                my $loc_link_name =
+                                  $loc_stage_name . ':' . $loc_orig_link;
+                                show_variable($loc_link_name,
+                                    '$loc_link_name');
+                                show_variable($loc_orig_fld, '$loc_orig_fld');
+                                show_variable($loc_stage_name,
+                                    '$loc_stage_name');
+                                $loc_deriv = calculate_derivations(
+                                    $param_fields, $loc_link_name,
+                                    $loc_orig_fld, $parse_and_source,
+                                    $loc_stage_name
+                                );
+                                push @collect_derivations, $loc_deriv;
+                            }
+                        }
+
+#итак для данной линки                        # print Dumper $stage_and_links;                        # push @next_stages, $loc_stage;
+                    }
+                }
             }
+            $check_strange_array{$loc_stage_name} =
+              calculate_derivations($param_fields, $link_name, $orig_fld,
+                $parse_and_source, $loc_stage_name);
         }
-        print Dumper \%check_strange_array;
+    }
+    say '\@collect_delivations';
+    say Dumper \@collect_derivations;
+    return \%check_strange_array;
+}
 
+sub show_parsed_constraint {
+    my ($param_fields, $link_name, $link_body, $mark,
+        $orig_fld,     $orig_link, $stage_name
+    ) = @_;
+    my $param = 'ParsedConstraint';
+    get_parsed_constraint_from_link($param_fields, $link_name, $param,
+        $link_body);
 
-        my $param = 'ParsedConstraint';
-        get_parsed_constraint_from_link($param_fields, $link_name, $param,
-            $link_body);
+    my $constraint = $link_body->{fields}->{$param};
+    if (defined $constraint) {
+        say "debug \$constraint=$constraint";
+    }
+    say
+      "debug [$mark] !! \$field: [$orig_fld] \$stage_name: [$stage_name] link: [$orig_link]";
+    say '';
 
-# my $OLEType = 'CTrxOutput';
-# my $link_body =          get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
-        my $constraint = $link_body->{fields}->{$param};
-        if (defined $constraint) {
-            say "debug \$constraint=$constraint";
-        }
-        say
-          "debug [$mark] !! \$field: [$orig_fld] \$stage_name: [$stage_name] link: [$orig_link]";
-        say '';
+}
+
+# Name "L105" L104.FILE_VERSION  GBC - GlowByteConsulting
+
+=pod
+     Identifier "V0S26P3"
+      OLEType "CTrxOutput"
+      Readonly "0"
+      Name "L104"
+      Partner "V0S83|V0S83P5"
+      Reject "0"
+      ErrorPin "0"
+      RowLimit "0"
+      Columns "COutputColumn"
+      
+         Derivation "L103.FILE_VERSION"
+         Group "0"
+         ParsedDerivation "L103.FILE_VERSION"
+         SourceColumn "L103.FILE_VERSION"
+      
+=cut    
+
+sub calculate_derivations {
+    my ($param_fields, $link_name, $orig_fld, $parse_and_source,
+        $loc_stage_name)
+      = @_;
+    my $derivations;
+    my ($cnt, $src_fields) =
+      is_multiple_source($parse_and_source->{'source_column'});
+    if ($cnt > 1) {
+        $derivations =
+          get_multiple_derivation($src_fields, $param_fields, $loc_stage_name,
+            $orig_fld);
 
     }
+    else {
+        $derivations =
+          get_source_and_derivation($param_fields, $link_name, $orig_fld);
+    }
+    return $derivations;
 }
 
 sub get_multiple_derivation {
@@ -1039,10 +1140,12 @@ sub get_table_ds_file_name {
         }
         elsif ($type eq 'dscapiop') {
 
+#это выгрузка в xml файл, но название странное
             # output_file
             $link_name_for_ds =
               get_properties($param_fields, $stage_name, 'output_file');
-            print Dumper $stage_body;
+
+            # print Dumper $stage_body;
             %table_comp = split_output_file_to_consistency($link_name_for_ds);
 
             # $link_name_for_ds = $stage_body->{'output_links'}[0];
@@ -1051,7 +1154,7 @@ sub get_table_ds_file_name {
             $table_comp{server} = 'XML ФАЙЛ';
         }
 
-        say "\$link_name_for_ds:$link_name_for_ds";
+        # say "\$link_name_for_ds:$link_name_for_ds";
 
         $table_comp{schema} = "#$table_comp{schema}#";
     }
@@ -1114,7 +1217,7 @@ sub split_ds_to_consistency {
 sub split_output_file_to_consistency {
     my $link_name_for_ds = shift;
     $link_name_for_ds =~ m/
-    (?<schema>\#.*?\#)
+    \#(?<schema>.*?)\#
     (?<table_name>.*)                   
          /x;
     my %table_comp = %+;
@@ -1262,7 +1365,8 @@ Krem2;Y2;fm_light_blue
 ID;AA2;fm_green
 PARENT_ID;AB2;fm_green
 MART:BCE 13.4, Magnitude, КРЕМ2, Armoni;AC2;fm_green
-Комментарий;AD2;fm_green';
+Комментарий;AD2;fm_green;
+Дата изменения;AE2;fm_green';
 
     return $caption_fields;
 }
@@ -2020,9 +2124,13 @@ sub parse_in_links {
         # _Part_Sort         _Sort_Part
         # $link_param{link_name} =~ s/(_Part_Sort|_Sort_Part)//g;
         my $link = $+{link_name};
+
+#избавляемся от промежуточного стейджа сортировки,
+#пока для наших задач он не нужен и его можно игнорировать
         $link =~ s/(_Part_Sort|_Sort_Part)//g;
         $link_param{link_name} = $link;
-        say 'in: ' . $link_param{link_name};
+
+        # say 'in: ' . $link_param{link_name};
         $link_param{link_type}  = $+{link_fields};
         $link_param{inout_type} = 'input_links';
         $link_param{trans_name} = $+{trans_name}
@@ -2111,7 +2219,8 @@ keep
     while ($body =~ m/$link/g) {
         my %link_param = ();
         $link_param{link_name} = $+{link_name};
-        say 'out: ' . $link_param{link_name};
+
+        # say 'out: ' . $link_param{link_name};
         $link_param{link_type}  = $+{link_fields};
         $link_param{inout_type} = 'output_links';
 
