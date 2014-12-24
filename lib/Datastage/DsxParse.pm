@@ -84,6 +84,8 @@ sub make_excel_and_fill_header {
     my ($file_name, $header_fields, $job_prop) = @_;
 
     $file_name = basename($file_name, ".dsx");
+
+    # my $dir_name = dirname($file_name);$dir_name.'\'.
     my $workbook =
       Spreadsheet::WriteExcel->new($header_fields->{ToolInstanceID} . '_ON_'
           . $header_fields->{ServerName} . '_'
@@ -202,7 +204,8 @@ sub make_mapping_job {
         'links'                      => $links,
         '\%start_stages_for_mapping' => \%start_stages_for_mapping
     );
-    debug(1, \%db);
+
+    # debug(1, \%db);
     my @fill_excel            = ();
     my $new_number_of_records = 0;
     my $rec_fields            = 3;
@@ -494,13 +497,15 @@ sub debug_parsed {
         for my $stage_hash (@{$curr_line}) {
             my $loc_stage_name = (%{$stage_hash})[0];
             say '$loc_stage_name: ' . (%{$stage_hash})[0];
+
 #выведем линки, принадлежащие стейджу
-my $stage_and_links=get_stage($links, $stage_name);
-print Dumper $stage_and_links;
+            my $stage_and_links = get_stage($links, $stage_name);
+            print Dumper $stage_and_links;
             my $parse_and_source =
               get_source_and_derivation($param_fields, $link_name, $orig_fld);
             $check_strange_array{$loc_stage_name} = $parse_and_source;
-            my ($cnt, $src_fields) =              is_multiple_source($parse_and_source->{'source_column'});
+            my ($cnt, $src_fields) =
+              is_multiple_source($parse_and_source->{'source_column'});
             if ($cnt > 1) {
                 my $derivations =
                   get_multiple_derivation($src_fields, $param_fields,
@@ -574,16 +579,18 @@ sub get_parsed_constraint_from_link {
     # get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
     # print DumpTree($link_body,           '$link_body');
     # print DumpTree($link_body->{fields}, '$link_body->{fields}');
-my $parsed_constraint=$link_body->{fields}->{ParsedConstraint};
+    my $parsed_constraint = $link_body->{fields}->{ParsedConstraint};
     if (defined $parsed_constraint) {
-        say '$parsed_constraint: '.$parsed_constraint;
+        say '$parsed_constraint: ' . $parsed_constraint;
         return $parsed_constraint;
+
         # print DumpTree($link_body, '$link_body');
 
         # debug(1, $link_body);
-    }else{
+    }
+    else {
         return undef;
-        }
+    }
 
     # my $sql_fields  = $link_body->{subrecord_body};
     # my @sql_records = ();
@@ -991,6 +998,26 @@ sub get_table_ds_file_name {
 
         my $type = get_type_file_or_ds_properties($param_fields, $stage_name);
 
+# say '$type: '.$type;
+# debug(1,$param_fields);
+
+=pod
+   BEGIN DSRECORD
+      Identifier "V46S2"
+      OLEType "CCustomStage"
+      Readonly "0"
+      Name "ROSBANKV2_CREDIT_tmp_xml"
+      NextID "2"
+      InputPins "V46S2P1"
+      StageType "XMLOutputPX"
+      AllowColumnMapping "0"
+      Properties "CCustomProperty"
+      BEGIN DSSUBRECORD
+         Name "output_file"
+         Value "#PS_BCE_CONNECTIONS.DIR_NR#ROSBANKV2_CREDIT_#LAST_DATE#_tmp.xml"
+      END DSSUBRECORD
+=cut      
+
         if ($type eq 'export') {
             $link_name_for_ds =
               get_file_properties($param_fields, $stage_name);
@@ -1010,12 +1037,38 @@ sub get_table_ds_file_name {
             %table_comp = split_ds_to_consistency($link_name_for_ds);
             $table_comp{server} = 'ДАТАСЕТ';
         }
+        elsif ($type eq 'dscapiop') {
+
+            # output_file
+            $link_name_for_ds =
+              get_properties($param_fields, $stage_name, 'output_file');
+            print Dumper $stage_body;
+            %table_comp = split_output_file_to_consistency($link_name_for_ds);
+
+            # $link_name_for_ds = $stage_body->{'output_links'}[0];
+
+            say 'dscapiop $link_name_for_ds: ' . $link_name_for_ds;
+            $table_comp{server} = 'XML ФАЙЛ';
+        }
 
         say "\$link_name_for_ds:$link_name_for_ds";
 
         $table_comp{schema} = "#$table_comp{schema}#";
     }
     return %table_comp;
+}
+
+sub get_properties {
+    my ($param_fields, $stage_name, $property_name) = @_;
+    my $OLEType = 'CCustomStage';
+    my $rec = get_body_of_records($param_fields, $stage_name, $OLEType);
+    my $xml;
+    for my $rec (@{$rec->{subrecord_body}}) {
+        if ($rec->{Name} eq $property_name) {
+            $xml = $rec->{Value};
+        }
+    }
+    return $xml;
 }
 
 sub split_file_to_consistency {
@@ -1053,6 +1106,16 @@ sub split_ds_to_consistency {
         (?<table_name>
          \w+[.]ds
          )         
+         /x;
+    my %table_comp = %+;
+    return %table_comp;
+}
+
+sub split_output_file_to_consistency {
+    my $link_name_for_ds = shift;
+    $link_name_for_ds =~ m/
+    (?<schema>\#.*?\#)
+    (?<table_name>.*)                   
          /x;
     my %table_comp = %+;
     return %table_comp;
@@ -1953,20 +2016,20 @@ sub parse_in_links {
 }xs;
     while ($body =~ m/$link/g) {
         my %link_param = ();
-        $link_param{link_name}  = $+{link_name};
+
+        # _Part_Sort         _Sort_Part
+        # $link_param{link_name} =~ s/(_Part_Sort|_Sort_Part)//g;
+        my $link = $+{link_name};
+        $link =~ s/(_Part_Sort|_Sort_Part)//g;
+        $link_param{link_name} = $link;
+        say 'in: ' . $link_param{link_name};
         $link_param{link_type}  = $+{link_fields};
         $link_param{inout_type} = 'input_links';
-
-        # 'input_links'
-        #$link_param{link_type} = $+{link_type};
         $link_param{trans_name} = $+{trans_name}
           if defined $+{trans_name};
         $link_param{is_param} = 'no';
-        if (defined $+{link_fields})
 
-          #if ( length( $link_param{link_type} ) >= 6
-          #&& substr( $link_param{link_type}, 0, 6 ) eq 'modify' )
-        {
+        if (defined $+{link_fields}) {
             $link_param{is_param} = 'yes';
             $link_param{params}   = parse_fields($+{link_fields});
             $link_param{link_keep_fields} =
@@ -2047,7 +2110,8 @@ keep
     #\[.*?\]
     while ($body =~ m/$link/g) {
         my %link_param = ();
-        $link_param{link_name}  = $+{link_name};
+        $link_param{link_name} = $+{link_name};
+        say 'out: ' . $link_param{link_name};
         $link_param{link_type}  = $+{link_fields};
         $link_param{inout_type} = 'output_links';
 
