@@ -454,6 +454,7 @@ sub debug_parsed {
     my $stage_name   = shift;
     my $param_fields = shift;
     if (defined $field) {
+        my $links = $param_fields->{job_prop}->{links};
         my ($orig_link, $orig_fld) = split(/[.]/, $field);
 
       # my $link_name = $stage_name . ':' . get_link_name_from_parsed($field);
@@ -493,12 +494,13 @@ sub debug_parsed {
         for my $stage_hash (@{$curr_line}) {
             my $loc_stage_name = (%{$stage_hash})[0];
             say '$loc_stage_name: ' . (%{$stage_hash})[0];
-
+#выведем линки, принадлежащие стейджу
+my $stage_and_links=get_stage($links, $stage_name);
+print Dumper $stage_and_links;
             my $parse_and_source =
               get_source_and_derivation($param_fields, $link_name, $orig_fld);
             $check_strange_array{$loc_stage_name} = $parse_and_source;
-            my ($cnt, $src_fields) =
-              is_multiple_source($parse_and_source->{'source_column'});
+            my ($cnt, $src_fields) =              is_multiple_source($parse_and_source->{'source_column'});
             if ($cnt > 1) {
                 my $derivations =
                   get_multiple_derivation($src_fields, $param_fields,
@@ -572,12 +574,16 @@ sub get_parsed_constraint_from_link {
     # get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
     # print DumpTree($link_body,           '$link_body');
     # print DumpTree($link_body->{fields}, '$link_body->{fields}');
-
-    if (defined $link_body->{fields}->{ParsedConstraint}) {
-        print DumpTree($link_body, '$link_body');
+my $parsed_constraint=$link_body->{fields}->{ParsedConstraint};
+    if (defined $parsed_constraint) {
+        say '$parsed_constraint: '.$parsed_constraint;
+        return $parsed_constraint;
+        # print DumpTree($link_body, '$link_body');
 
         # debug(1, $link_body);
-    }
+    }else{
+        return undef;
+        }
 
     # my $sql_fields  = $link_body->{subrecord_body};
     # my @sql_records = ();
