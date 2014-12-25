@@ -484,6 +484,10 @@ sub debug_parsed {
         show_parsed_constraint($link_body);
         show_variable($mark, '$mark_debug_parsed_' . $stage_name);
 
+#изначально $field - это одно поле, тогда , как
+#$source_column - может состоять и из нескольких полей, разделенных ';'
+#например,L203.SUMMA;L203.DEVISE;L203.CROSS_RUB,
+#тогда у нас может получиться рекурсия, которая нам не нужна
         my ($parse_and_source, $pars_deriv, $source_col) =
           calc_deriv($param_fields, $field);
 
@@ -498,6 +502,37 @@ sub debug_parsed {
 }
 
 sub calc_deriv {
+    my ($param_fields, $source_col) = @_;
+    my ($cnt,          $src_fields) = is_multiple_source($source_col);
+    my ($parse_and_source, $pars_deriv);
+
+    if ($cnt > 1) {
+        my @out = ();
+        for my $field (@{$src_fields}) {
+            my @loc_param = ();
+            ($parse_and_source, $pars_deriv, $source_col) =
+              calc_deriv_single($param_fields, $field);
+            @loc_param = ($parse_and_source, $pars_deriv, $source_col);
+            push @out, \@loc_param;
+
+# push @sql_user_fiendly,          from_dsx_2_utf( $sql_field->{$field_name} );
+        }
+        return (\@out, $pars_deriv, $source_col);
+    }
+    else {
+        my ($loc_orig_link, $loc_orig_fld) = split(/[.]/, $source_col);
+        my $parse_and_source =
+          get_source_and_derivation($param_fields, $loc_orig_link,
+            $loc_orig_fld, $source_col);
+        my $pars_deriv =
+          $parse_and_source->{$source_col}->{parsed_derivation};
+        $source_col = $parse_and_source->{$source_col}->{source_column};
+        return ($parse_and_source, $pars_deriv, $source_col);
+    }
+
+}
+
+sub calc_deriv_single {
     my ($param_fields, $source_col) = @_;
     my ($loc_orig_link, $loc_orig_fld) = split(/[.]/, $source_col);
     my $parse_and_source =
