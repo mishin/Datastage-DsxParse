@@ -218,7 +218,10 @@ sub make_mapping_job {
         my $link_body =
           get_body_of_stage($param_fields, $final_stage_for_draw, $links);
 
-        # say ' $final_stage_for_draw: ' . $final_stage_for_draw;
+
+        print DumpTree($link_body, '$link_body');
+
+        say ' $final_stage_for_draw: ' . $final_stage_for_draw;
 
         #пишем в excel !!
         $curr_job->write_row('B' . $rec_fields, $link_body);
@@ -708,8 +711,9 @@ sub get_source_and_derivation {
     my $link_body =
       get_body_of_records($param_fields, $orig_link, 'CTrxOutput');
 
-    my $fields               = get_parsed_any($orig_fld, $link_body);
-    my $parsed_derivation    = $fields->{ParsedDerivation};
+    my $fields = get_parsed_any($orig_fld, $link_body);
+    my $parsed_derivation = $fields->{ParsedDerivation};
+    $parsed_derivation =~ s{\\'}{'}g if defined $parsed_derivation;
     my $source_column        = $fields->{SourceColumn};
     my %compact_construction = ();
     my %parse_and_source     = ();
@@ -979,6 +983,8 @@ sub from_dsx_2_utf {
         $string =~ s#Searchable\? [YN]##g;
         $string =~ s#\\\((...)\)#chr(hex$1)#gsme;
         $string =~ s#\\\((....)\)#chr(hex$1)#gsme;
+
+        # $string =~ s#\\'#'#gsme;
     }
     return $string;
 }
