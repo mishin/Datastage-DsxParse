@@ -483,20 +483,20 @@ sub debug_parsed {
           get_parsed_fields_from_all( $param_fields, $link_name, 'CTrxOutput' );
 
         my $parse_and_source =
-          get_source_and_derivation( $param_fields, $link_name, $orig_fld );
-        if ( defined $parse_and_source->{parsed_derivation} ) {
+          get_source_and_derivation( $param_fields, $link_name, $orig_fld,$field );
+        if ( defined $parse_and_source->{$field}->{parsed_derivation} ) {
 
             # say Dumper $parse_and_source;
-            say 'ParsedDerivation: ' . $parse_and_source->{parsed_derivation};
+            say 'ParsedDerivation: ' . $parse_and_source->{$field}->{parsed_derivation};
 
 # сложные случаи, где SourceColumn:=@INROWNUM будем рассматривать после того, как завершим дело с простыми случаями обычными l2.GR2198
-            say 'SourceColumn:' . $parse_and_source->{source_column}
-              if defined $parse_and_source->{source_column};
+            say 'SourceColumn:' . $parse_and_source->{$field}->{source_column}
+              if defined $parse_and_source->{$field}->{source_column};
         }
 
         my $deriv =
           get_deriv_from_all( $curr_line, $links, $orig_link, $param_fields,
-            $link_name, $orig_fld, $parse_and_source );
+            $link_name, $orig_fld, $parse_and_source->{$field} ,$field );
 
         show_parsed_constraint(
             $param_fields, $link_name, $link_body, $mark,
@@ -507,7 +507,7 @@ sub debug_parsed {
 
 sub get_deriv_from_all {
     my ( $curr_line, $links, $orig_link, $param_fields, $link_name, $orig_fld,
-        $parse_and_source )
+        $parse_and_source,$field  )
       = @_;
     my %check_strange_array = ();
     my @collect_derivations = ();
@@ -553,7 +553,7 @@ sub get_deriv_from_all {
                                 $loc_deriv = calculate_derivations(
                                     $param_fields, $loc_link_name,
                                     $loc_orig_fld, $parse_and_source,
-                                    $loc_stage_name
+                                    $loc_stage_name,$parse_and_source->{source_column} 
                                 );
                                 push @collect_derivations, $loc_deriv;
                             }
@@ -565,7 +565,7 @@ sub get_deriv_from_all {
             }
             $check_strange_array{$loc_stage_name} =
               calculate_derivations( $param_fields, $link_name, $orig_fld,
-                $parse_and_source, $loc_stage_name );
+                $parse_and_source, $loc_stage_name ,$field );
         }
     }
     say '\@collect_derivations';
@@ -614,45 +614,50 @@ sub show_parsed_constraint {
 
 sub calculate_derivations {
     my ( $param_fields, $link_name, $orig_fld, $parse_and_source,
-        $loc_stage_name )
+        $loc_stage_name ,$field )
       = @_;
+      say 'calculate_derivations';
     my $derivations;
     my ( $cnt, $src_fields ) =
       is_multiple_source( $parse_and_source->{'source_column'} );
     if ( $cnt > 1 ) {
         $derivations =
           get_multiple_derivation( $src_fields, $param_fields, $loc_stage_name,
-            $orig_fld );
+            $orig_fld ,$field );
+            say 'calculate_derivations cnt>1';
 
     }
     else {
         $derivations =
-          get_source_and_derivation( $param_fields, $link_name, $orig_fld );
+          get_source_and_derivation( $param_fields, $link_name, $orig_fld ,$field );
+          say 'calculate_derivations cnt=1';
     }
     return $derivations;
 }
 
 sub get_multiple_derivation {
-    my ( $src_fields, $param_fields, $loc_stage_name, $orig_fld ) = @_;
+    my ( $src_fields, $param_fields, $loc_stage_name, $orig_fld ,$field ) = @_;
+    say 'get_multiple_derivation';
     my @fields_and_derivations = ();
     for my $ff ( @{$src_fields} ) {
         my ( $loc_link, $loc_fld ) = split( /[.]/, $ff );
         my $loc_link_name = $loc_stage_name . ':' . $loc_link;
         my $loc_parse_and_source =
-          get_source_and_derivation( $param_fields, $loc_link_name, $loc_fld );
-        my %loc_param = ();
-        @loc_param{ 'ff', 'loc_link', 'loc_fld', 'loc_parse_and_source' } =
-          ( $ff, $loc_link, $loc_fld, $loc_parse_and_source );
-        push @fields_and_derivations, \%loc_param;
+          get_source_and_derivation( $param_fields, $loc_link_name, $loc_fld ,$ff);
+       # my %loc_param = ();
+       # @loc_param{ 'ff', 'loc_link', 'loc_fld', 'loc_parse_and_source' } =
+         # ( $ff, $loc_link, $loc_fld, $loc_parse_and_source );
+        push @fields_and_derivations, $loc_parse_and_source ;#\%loc_param;
 
         # $fields_and_derivations{$ff}=$loc_parse_and_source;
         # print Dumper $loc_parse_and_source;
     }
+    say Dumper \@fields_and_derivations;
     return \@fields_and_derivations;
 }
 
 sub get_source_and_derivation {
-    my ( $param_fields, $link_name, $orig_fld ) = @_;
+    my ( $param_fields, $link_name, $orig_fld,$field ) = @_;
     my $link_body =
       get_parsed_fields_from_all( $param_fields, $link_name, 'CTrxOutput' );
 
@@ -660,10 +665,13 @@ sub get_source_and_derivation {
       get_parsed_any( $param_fields, $link_name, $orig_fld, $link_body );
     my $parsed_derivation = $fields->{ParsedDerivation};
     my $source_column     = $fields->{SourceColumn};
+    my %compact_construction=();
     my %parse_and_source  = ();
     @parse_and_source{ 'parsed_derivation', 'source_column' } =
       ( $parsed_derivation, $source_column );
-    return \%parse_and_source;
+      $compact_construction{$field }=\%parse_and_source;
+      say Dumper \%compact_construction;
+    return \%compact_construction;
 }
 
 sub get_parsed_constraint_from_link {
