@@ -412,7 +412,9 @@ sub get_source_sql_field_parsed {
     # say 'get_source_sql_field_parsed!!';
     #$field_name='ParsedDerivation'
     my @sql_user_fiendly = ();
+    my %derivations=();
     for my $sql_field ( @{$sql_fields} ) {
+        my @deriv_collect=();
         my $field_body = $sql_field->{$field_name};
         if ( defined $field_body ) {
             my ( $cnt, $src_fields ) = is_multiple_source($field_body);
@@ -421,7 +423,7 @@ sub get_source_sql_field_parsed {
 
 #Если это поле источник, то заполняем каждое поле в отдельности
                     push @sql_user_fiendly, from_dsx_2_utf($field);
-                    debug_parsed( '1_' . $field_body,
+               push \@deriv_collect,     debug_parsed( '1_' . $field_body,
                         $field, $stage_name, $param_fields );
 
                 }
@@ -430,14 +432,19 @@ sub get_source_sql_field_parsed {
 
 #если источником является одно поле, то все падает сюда!
                 push @sql_user_fiendly, from_dsx_2_utf($field_body);
-                debug_parsed(
+                push \@deriv_collect,debug_parsed(
                     '2_' . $field_body, $field_body,
                     $stage_name,        $param_fields
                 );
 
             }
         }
+        $derivations{$sql_field}=\@deriv_collect;
     }
+    
+    my $lines     = $param_fields->{job_prop}->{lines};
+    my %struct=('lines'=>$lines,'$derivations'=>\%derivations);
+    debug(1,\%struct);
     return \@sql_user_fiendly;
 }
 
@@ -498,8 +505,9 @@ sub debug_parsed {
               calc_deriv( $param_fields, $source_col );
         }
 
-        say Dumper \@deriv_collect;
+        # say Dumper \@deriv_collect;
     }
+    return \@deriv_collect;
 }
 
 sub calc_deriv {
