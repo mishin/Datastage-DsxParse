@@ -499,7 +499,7 @@ sub get_source_sql_field_parsed {
 
 #Если это поле источник, то заполняем каждое поле в отдельности
                     push @sql_user_fiendly, from_dsx_2_utf($field);
-                    push \@deriv_collect,
+                    push @deriv_collect,
                       debug_parsed('1_' . $field_body,
                         $field, $stage_name, $param_fields);
 
@@ -512,7 +512,7 @@ sub get_source_sql_field_parsed {
 
 #если источником является одно поле, то все падает сюда!
                 push @sql_user_fiendly, from_dsx_2_utf($field_body);
-                push \@deriv_collect,
+                push @deriv_collect,
                   debug_parsed(
                     '2_' . $field_body, $field_body,
                     $stage_name,        $param_fields
@@ -568,7 +568,7 @@ sub debug_parsed {
         my $links = $param_fields->{job_prop}->{links};
         my ($orig_link, $orig_fld) = split(/[.]/, $field);
 
-        # my $link_name = $stage_name . ':' . $orig_link;
+        my $link_name = $stage_name . ':' . $orig_link;
 
         my $link_body =
           get_body_of_records($param_fields, $orig_link, 'CTrxOutput');
