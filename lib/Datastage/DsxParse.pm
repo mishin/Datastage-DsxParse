@@ -257,7 +257,7 @@ sub make_mapping_job {
         # say '$final_stage_for_draw: ' . $final_stage_for_draw;
     }
 
-        my $stage_name = 'address_insert';
+    my $stage_name = 'address_insert';
     my $debug_variable = get_stage( $links, $stage_name );
 
     # address_insert.STRNAM
@@ -381,20 +381,11 @@ copy
     #sql поля есть
     my $sql_fields = get_sql_fields( $param_fields, $link_name );
 
-    #my %deb = (
-    # '$param_fields' => $param_fields,
-    # '$link_name' => $link_name,
-    # '$sql_fields' => $sql_fields
-    #);
-    #say '$link_name: ' . $link_name;
-    #if ($link_name eq 'T199:INS') {
-    # debug(1, \%deb);
-    #}
-    # print Dumper $sql_fields;
-    # print Dumper $sql_fields;
     #6.fields
     my $fields = get_source_sql_field( $sql_fields, 'Name' );
+    my $fields_properties = get_properties_sql_field($sql_fields);  #, 'Name' );
 
+    # debug(1,$fields_properties );
     # make_sql_fields_for_show($sql_fields);
     #say 'say $fields: ';
     #print Dumper $sql_fields;
@@ -441,17 +432,75 @@ copy
 #if (defined $parsed_constraint) {
 # say '$parsed_constraint: ' . $parsed_constraint;
 #}
-    my @show_values = (
-        $project,          $job,          $server,
-        $schema,           $table_name,   $fields,
-        $types,            $key,          $nullable,
-        $parsedderivation, $sourcecolumn, $descriptions,
-        $parsed_constraint
-    );
-    my $big_array = make_data_4_show( \@show_values, $fields );
+    my %show_values = ();
+    @show_values{
+        'project', 'job',        'server',
+        'schema',  'table_name', 'parsed_constraint'
+    } = ( $project, $job, $server, $schema, $table_name, $parsed_constraint );
+    my $big_array = make_data_4_show( \%show_values, $fields_properties );
 
     # print Dumper $big_array;
     return $big_array;
+}
+
+sub make_data_4_show {
+    my ( $values_4_show, $fields ) = @_;
+    my @big_array = ();
+
+    for my $entity ( 'project', 'job', 'server', 'schema', 'table_name' ) {
+        my @entity_array = ();
+        @entity_array = map { $values_4_show->{$entity} } @{$fields};
+        push @big_array, \@entity_array;
+    }
+
+    for my $field_name (
+        qw/Name Type Key Nullable ParsedDerivation SourceColumn Description/)
+    {
+        push @big_array, get_arr_of_field( $fields, $field_name );
+    }
+
+    for my $entity ('parsed_constraint') {
+        my @entity_array = ();
+        @entity_array = map { $values_4_show->{$entity} } @{$fields};
+        push @big_array, \@entity_array;
+    }
+
+    return \@big_array;
+}
+
+sub get_arr_of_field {
+    my ( $fields, $field_name ) = @_;
+    my @entity_array = ();
+    for my $sql_field ( @{$fields} ) {
+
+        # say 'Z: '.reftype $sql_field;
+        # debug(1,$sql_field);
+
+        push @entity_array, $sql_field->{$field_name};
+    }
+    return \@entity_array;
+}
+
+sub get_properties_sql_field {
+    my ($sql_fields) = @_;
+    my @sql_user_fiendly = ();
+    for my $sql_field ( @{$sql_fields} ) {
+        my %field_collect = ();
+        $field_collect{Name} = $sql_field->{Name};
+        $field_collect{Type} =
+          decode_sql_type( $sql_field->{SqlType}, $sql_field->{Precision} );
+        $field_collect{Key} =
+          ( $sql_field->{KeyPosition} == '1' ) ? 'ДА' : 'НЕТ';
+        $field_collect{Nullable} =
+          ( $sql_field->{Nullable} == '1' ) ? 'НЕТ' : 'ДА';
+        $field_collect{ParsedDerivation} =
+          from_dsx_2_utf( $sql_field->{ParsedDerivation} );
+        $field_collect{SourceColumn} = $sql_field->{SourceColumn};
+        $field_collect{Description} =
+          from_dsx_2_utf( $sql_field->{Description} );
+        push @sql_user_fiendly, \%field_collect;
+    }
+    return \@sql_user_fiendly;
 }
 
 sub get_parsed_constraint {
@@ -493,29 +542,29 @@ sub get_source_sql_field_parsed {
         my @deriv_collect = ();
         my $field_body    = $sql_field->{$field_name};
         if ( defined $field_body ) {
-            my ( $cnt, $src_fields ) = is_multiple_source($field_body);
-            if ( $cnt > 1 ) {
-                for my $field ( @{$src_fields} ) {
 
-#Если это поле источник, то заполняем каждое поле в отдельности
-                    push @sql_user_fiendly, from_dsx_2_utf($field);
-                    push \@deriv_collect,
-                      debug_parsed( '1_' . $field_body,
-                        $field, $stage_name, $param_fields );
+            # my ( $cnt, $src_fields ) = is_multiple_source($field_body);
+            # if ( $cnt > 1 ) {
+            # for my $field ( @{$src_fields} ) {
 
-#TO-DO: 1) Нужно переформатировать способ вывода информации о полях
-#TO-DO: преобразовав массив в хэш
-                }
-            }
-            else {
+# #Если это поле источник, то заполняем каждое поле в отдельности
+# push @sql_user_fiendly, from_dsx_2_utf($field);
+# push \@deriv_collect,
+# debug_parsed( '1_' . $field_body,
+# $field, $stage_name, $param_fields );
+
+# #TO-DO: 1) Нужно переформатировать способ вывода информации о полях
+# #TO-DO: преобразовав массив в хэш
+# }
+# }
+# else {
 #если источником является одно поле, то все падает сюда!
-                push @sql_user_fiendly, from_dsx_2_utf($field_body);
-                push \@deriv_collect,
-                  debug_parsed(
-                    '2_' . $field_body, $field_body,
-                    $stage_name,        $param_fields
-                  );
-            }
+            push @sql_user_fiendly, from_dsx_2_utf($field_body);
+            push \@deriv_collect,
+              debug_parsed( '2_' . $field_body,
+                $field_body, $stage_name, $param_fields );
+
+            # }
         }
         $derivations{$sql_field} = \@deriv_collect;
     }
@@ -562,8 +611,8 @@ sub debug_parsed {
     my @deriv_collect = ();
     my %deriv_collect = ();
     if ( defined $field ) {
-    my $power_lines = $param_fields->{job_prop}->{power_lines};
-        my $links = $param_fields->{job_prop}->{links};
+        my $power_lines = $param_fields->{job_prop}->{power_lines};
+        my $links       = $param_fields->{job_prop}->{links};
         my ( $orig_link, $orig_fld ) = split( /[.]/, $field );
 
         # my $link_name = $stage_name . ':' . $orig_link;
@@ -815,22 +864,24 @@ sub get_source_sql_field {
     my ( $sql_fields, $field_name ) = @_;
     my @sql_user_fiendly = ();
     for my $sql_field ( @{$sql_fields} ) {
-        my ( $cnt, $src_fields ) =
-          is_multiple_source( $sql_field->{'SourceColumn'} );
-        if ( $cnt > 1 ) {
-            for my $field ( @{$src_fields} ) {
-                if ( $field_name eq 'SourceColumn' ) {
-                    push @sql_user_fiendly, from_dsx_2_utf($field);
-                }
-                else {
-                    push @sql_user_fiendly,
-                      from_dsx_2_utf( $sql_field->{$field_name} );
-                }
-            }
-        }
-        else {
-            push @sql_user_fiendly, from_dsx_2_utf( $sql_field->{$field_name} );
-        }
+
+        # my ( $cnt, $src_fields ) =
+        # is_multiple_source( $sql_field->{'SourceColumn'} );
+        # if ( $cnt > 1 ) {
+        # for my $field ( @{$src_fields} ) {
+        # if ( $field_name eq 'SourceColumn' ) {
+        # push @sql_user_fiendly, from_dsx_2_utf($field);
+        # }
+        # else {
+        # push @sql_user_fiendly,
+        # from_dsx_2_utf( $sql_field->{$field_name} );
+        # }
+        # }
+        # }
+        # else {
+        push @sql_user_fiendly, from_dsx_2_utf( $sql_field->{$field_name} );
+
+        # }
     }
     return \@sql_user_fiendly;
 }
@@ -841,16 +892,18 @@ sub get_sql_types {
     for my $sql_field ( @{$sql_fields} ) {
         my $type =
           decode_sql_type( $sql_field->{SqlType}, $sql_field->{Precision} );
-        my ( $cnt, $src_fields ) =
-          is_multiple_source( $sql_field->{'SourceColumn'} );
-        if ( $cnt > 1 ) {
-            for ( @{$src_fields} ) {
-                push @sql_user_fiendly, $type;
-            }
-        }
-        else {
-            push @sql_user_fiendly, $type;
-        }
+
+        # my ( $cnt, $src_fields ) =
+        # is_multiple_source( $sql_field->{'SourceColumn'} );
+        # # if ( $cnt > 1 ) {
+        # for ( @{$src_fields} ) {
+        # push @sql_user_fiendly, $type;
+        # }
+        # }
+        # else {
+        push @sql_user_fiendly, $type;
+
+        # }
     }
     return \@sql_user_fiendly;
 }
@@ -938,26 +991,6 @@ sub get_type_file_or_ds_properties {
     return $type;
 }
 
-sub make_data_4_show {
-    my ( $values_4_show, $fields ) = @_;
-    my @big_array = ();
-
-    # my @entity_array = ();
-    for my $entity ( @{$values_4_show} ) {
-        my $reftype = reftype $entity;
-
-   #это не ссылка, а простой скаляр или строка
-        if ( !defined $reftype ) {
-            my @entity_array = map { $entity } @{$fields};
-            push @big_array, \@entity_array;
-        }
-        elsif ( $reftype eq 'ARRAY' ) {
-            push @big_array, $entity;
-        }
-    }
-    return \@big_array;
-}
-
 sub get_sql_field {
     my ( $sql_fields, $field_name ) = @_;
     my @sql_user_fiendly = ();
@@ -1015,18 +1048,20 @@ sub get_sql_mandatory {
     my @sql_user_fiendly = ();
     for my $sql_field ( @{$sql_fields} ) {
         my $key = ( $sql_field->{Nullable} == '1' ) ? 'НЕТ' : 'ДА';
-        my $src_column = $sql_field->{'SourceColumn'};
-        my ( $cnt, $src_fields ) = is_multiple_source($src_column);
-        if ( $cnt > 1 ) {
 
-            # say 'SourceColumn: ' . $src_column;
-            for ( @{$src_fields} ) {
-                push @sql_user_fiendly, $key;
-            }
-        }
-        else {
-            push @sql_user_fiendly, $key;
-        }
+        # my $src_column = $sql_field->{'SourceColumn'};
+        # my ( $cnt, $src_fields ) = is_multiple_source($src_column);
+        # if ( $cnt > 1 ) {
+
+        # # say 'SourceColumn: ' . $src_column;
+        # for ( @{$src_fields} ) {
+        # push @sql_user_fiendly, $key;
+        # }
+        # }
+        # else {
+        push @sql_user_fiendly, $key;
+
+        # }
     }
     return \@sql_user_fiendly;
 }
@@ -1036,18 +1071,20 @@ sub get_sql_keys {
     my @sql_user_fiendly = ();
     for my $sql_field ( @{$sql_fields} ) {
         my $key = ( $sql_field->{KeyPosition} == '1' ) ? 'ДА' : 'НЕТ';
-        my $src_column = $sql_field->{'SourceColumn'};
-        my ( $cnt, $src_fields ) = is_multiple_source($src_column);
-        if ( $cnt > 1 ) {
 
-            # say 'SourceColumn: ' . $src_column;
-            for ( @{$src_fields} ) {
-                push @sql_user_fiendly, $key;
-            }
-        }
-        else {
-            push @sql_user_fiendly, $key;
-        }
+        # my $src_column = $sql_field->{'SourceColumn'};
+        # my ( $cnt, $src_fields ) = is_multiple_source($src_column);
+        # if ( $cnt > 1 ) {
+
+        # # say 'SourceColumn: ' . $src_column;
+        # for ( @{$src_fields} ) {
+        # push @sql_user_fiendly, $key;
+        # }
+        # }
+        # else {
+        push @sql_user_fiendly, $key;
+
+        # }
     }
     return \@sql_user_fiendly;
 }
