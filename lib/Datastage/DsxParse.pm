@@ -53,7 +53,7 @@ sub parse_dsx {
         $lines       = fill_way_and_links( $links, $direction );
         $power_lines = add_links_to_lines( $links, $lines );
 
-        #$lines       = $power_lines;
+        $lines       = $power_lines;
 
         #     debug(1, $power_lines);
     }
@@ -280,62 +280,10 @@ sub get_stage {
 #
 sub get_body_of_stage {
     my ( $param_fields, $stage_name, $links ) = @_;
-    my $stage_body;
+    my $stage_body=get_stage($links,$stage_name);
 
-    # debug (1, $param_fields);
-    #my $links=$param_fields;
-    #идем по всем стадиям
-    for my $loc_stage ( @{$links} ) {
-        if ( $loc_stage->{stage_name} eq $stage_name ) {
-            $stage_body = $loc_stage;
-        }
-    }
-
-=pod
-если оператор, то логика меняется
-нужно извлекать параметр -file из dsx_parse
-#################################################################
-#### STAGE: CRZ_History
-## Operator
-export
-## Operator options
--schema record
-{final_delim=end, delim='|', null_field='', quote=none}
-(
-HST_DATE:nullable string[];
-HST_CODE:nullable string[];
-HST_NAME:nullable string[];
-Z_UID:string[max=36];
-)
--file '[&"TempFilePathDS"]crz_history.txt'
--overwrite
--rejects continue
-## General options
-[ident('CRZ_History'); jobmon_ident('CRZ_History')]
-## Inputs
-0< [] 'Transformer_1:Hist.v'
-;
-в этом его отличие от
-#################################################################
-#### STAGE: Data_Set_RL1
-## Operator
-copy
-## General options
-[ident('Data_Set_RL1')]
-## Inputs
-0< [] 'Transformer_1:RL1.v'
-## Outputs
-0>| [ds] '[&"TempFilePathDS"]rl1.ds'
-;
-где датасет уже является оутпут линком!!
-=cut
-
-    # if ($stage_name eq 'ADR'){
-    # print Dumper $stage_body;
-    # }
     my $link_name = $stage_body->{'input_links'}[0];
 
-    # print Dumper $stage_body;
     say 'link_name: ' . $link_name;
     my $xml_prop = get_xml_properties( $param_fields, $stage_name );
     say '$stage_name: ' . $stage_name;
@@ -383,7 +331,9 @@ copy
 
     #6.fields
     my $fields = get_source_sql_field( $sql_fields, 'Name' );
-    my $fields_properties = get_properties_sql_field($sql_fields);  #, 'Name' );
+    my $stage_lines = $param_fields->{job_prop}->{lines}->{$stage_name};
+    show_variable( Dumper $stage_lines, '$stage_lines_' . $stage_name );
+    my $fields_properties = get_properties_sql_field($sql_fields,$stage_lines);  #, 'Name' );
 
     # debug(1,$fields_properties );
     # make_sql_fields_for_show($sql_fields);
@@ -472,17 +422,13 @@ sub get_arr_of_field {
     my ( $fields, $field_name ) = @_;
     my @entity_array = ();
     for my $sql_field ( @{$fields} ) {
-
-        # say 'Z: '.reftype $sql_field;
-        # debug(1,$sql_field);
-
-        push @entity_array, $sql_field->{$field_name};
+      push @entity_array, $sql_field->{$field_name};
     }
     return \@entity_array;
 }
 
 sub get_properties_sql_field {
-    my ($sql_fields) = @_;
+    my ($sql_fields,$stage_lines) = @_;
     my @sql_user_fiendly = ();
     for my $sql_field ( @{$sql_fields} ) {
         my %field_collect = ();
