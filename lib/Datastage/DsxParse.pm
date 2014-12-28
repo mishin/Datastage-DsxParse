@@ -332,7 +332,7 @@ sub get_body_of_stage {
     #6.fields
     my $fields = get_source_sql_field( $sql_fields, 'Name' );
     my $stage_lines = $param_fields->{job_prop}->{lines}->{$stage_name};
-    show_variable( Dumper $stage_lines, '$stage_lines_' . $stage_name );
+    
     my $fields_properties = get_properties_sql_field($sql_fields,$stage_lines);  #, 'Name' );
 
     # debug(1,$fields_properties );
@@ -442,12 +442,22 @@ sub get_properties_sql_field {
         $field_collect{ParsedDerivation} =
           from_dsx_2_utf( $sql_field->{ParsedDerivation} );
         $field_collect{SourceColumn} = $sql_field->{SourceColumn};
+        $field_collect{Full_Source} = get_full_source($sql_field->{SourceColumn},$stage_lines);
         $field_collect{Description} =
           from_dsx_2_utf( $sql_field->{Description} );
         push @sql_user_fiendly, \%field_collect;
     }
     return \@sql_user_fiendly;
 }
+
+sub get_full_source{
+	my ($src_col,$stage_lines)=@_;
+	 if (defined $src_col){
+	show_variable( $src_col, '$src_col' );
+	show_variable( Dumper $stage_lines, '$stage_lines' );
+}
+return 1;
+	}
 
 sub get_parsed_constraint {
     my ($link_body) = @_;
