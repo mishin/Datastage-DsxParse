@@ -465,15 +465,21 @@ sub show_src_caption {
 }
 
 sub add_to_src {
-    my ($src_col, $sql_field, $param_fields) = @_;
-    my ($src_link, $src_field) = get_link_field($src_col);
-    my %src_field = (
-        name              => $src_col,
-        src_link          => $src_link,
-        src_field         => $src_field,
-        parsed_derivation => from_dsx_2_utf($sql_field->{ParsedDerivation}),
-        parsed_constraint => get_parsed_constraint($src_link, $param_fields),
-    );
+    my ($sql_field, $param_fields) = @_;
+    my $src_col   = $sql_field->{SourceColumn};
+    my %src_field = ();
+    if (defined $src_col) {
+        my ($src_link, $src_field) = get_link_field($src_col);
+        %src_field = (
+            name      => $src_col,
+            src_link  => $src_link,
+            src_field => $src_field,
+            parsed_derivation =>
+              from_dsx_2_utf($sql_field->{ParsedDerivation}),
+            parsed_constraint =>
+              get_parsed_constraint($src_link, $param_fields),
+        );
+    }
     return \%src_field;
 }
 
@@ -483,52 +489,98 @@ sub get_link_field {
 }
 
 sub get_full_source_center {
-
-    # $tree_of_source =
-    # get_full_source_center($joined_links, $param_fields, $sql_field,
-    # $stage_name);
     my ($joined_links, $param_fields, $sql_field, $stage_name) = @_;
-    my $src_col        = $sql_field->{SourceColumn};    #$sql_field->{Name}
-    my %source_columns = ();
-    my ($src_link, $src_field) =
-      get_link_field($src_col);    #$stage_name.'.'.$sql_field->{Name}
-    say 'get_full_source_center for $src_col: ' . $src_col;
-    $source_columns{$src_col} =
-      add_to_src($src_col, $sql_field, $param_fields);
+    my @source_columns = ();
 
-    my $loc_src_col;
+# $source_columns{$sql_field->{SourceColumn}} =      add_to_src( $sql_field->{SourceColumn}, $sql_field, $param_fields);
+    my $curr_source = add_to_src($sql_field, $param_fields);
+    push @source_columns, $curr_source;
+
+    print '$curr_source: ' . (Dumper $curr_source);
+    my ($src_link, $src_field, $fields);
     for my $stage_link (@{$joined_links}) {
-        if (defined $loc_src_col) {
-            ($src_link, $src_field) = get_link_field($loc_src_col);
-        }
-        $loc_src_col = $src_col;
-        say '    ' . $stage_link;
-        my $loc_link = get_link($stage_link);
-        my $parsed_constraint =
-          get_parsed_constraint($loc_link, $param_fields);
-        show_variable($parsed_constraint, '$parsed_constraint');
-
-#Если линк текущего поля совпадает с линком в дереве
-        if ($src_link eq $loc_link) {
-            my $fields = get_fields($param_fields, $src_link, $src_field);
-            my $loc_src_col = $fields->{SourceColumn};
-            if (defined $loc_src_col) {
-                if (!defined $source_columns{$loc_src_col}) {
-                    say 'добавили: ' . $loc_src_col;
-                    show_src_caption($fields);
-                    $source_columns{$fields->{Name}} =
-                      add_to_src($loc_src_col, $fields, $param_fields);
-                }
-            }
-
+        if (defined $curr_source->{name}) {
+            ($src_link, $src_field) = get_link_field($curr_source->{name});
+            $fields = get_fields($param_fields, $src_link, $src_field);
+            $curr_source = add_to_src($fields, $param_fields);
+            push @source_columns, $curr_source;
         }
     }
-    say '\%source_columns: ' . Dumper \%source_columns;
-    return \%source_columns;
+
+
+    return \@source_columns;
 }
 
 =pod
 
+   if (defined $curr_source->{name}) {
+			say '3-й шаг не работает:'.$curr_source->{name};
+             ($src_link, $src_field) = get_link_field($curr_source->{name});
+			 say '3-й шаг не работает: $src_link: '.$src_link;
+			 say '3-й шаг не работает: $src_field: '.$src_field;
+             $fields = get_fields($param_fields, $src_link, $src_field);
+			 # say '3-й шаг не работает: $fields: '. (Dumper $fields);
+            $curr_source = add_to_src($fields, $param_fields);
+            push @source_columns, $curr_source;
+        }
+    # }
+ # my $src_col        = $sql_field->{SourceColumn};    #$sql_field->{Name}
+    # my %source_columns = ();
+    # my @source_columns = ();
+    # # my ($src_link, $src_field) = get_link_field($src_col);
+    # say 'get_full_source_center for $src_col: ' . $src_col;
+    # $source_columns{$src_col} =      add_to_src($src_col, $sql_field, $param_fields);
+    # push @source_columns, add_to_src($src_col, $sql_field, $param_fields);
+
+    # my $loc_src_col;
+    # for my $stage_link (@{$joined_links}) {
+        # my $i = 1;
+        # if (defined $loc_src_col) {
+            # ($src_link, $src_field) = get_link_field($loc_src_col);
+            # say 'мы здесь: ' . $src_col . ' ' . $i++ . ' раз';
+        # }
+        # else {
+            # $loc_src_col = $src_col;
+        # }
+        # say '    ' . $stage_link;
+        # my $loc_link = get_link($stage_link);
+        # my $parsed_constraint =
+          # get_parsed_constraint($loc_link, $param_fields);
+        # show_variable($parsed_constraint, '$parsed_constraint');
+
+# #Если линк текущего поля совпадает с линком в дереве
+        # if ($src_link eq $loc_link) {
+            # my $fields = get_fields($param_fields, $src_link, $src_field);
+            # $loc_src_col = $fields->{SourceColumn};
+			# say '$loc_src_col: '.$loc_src_col;
+            # if (defined $loc_src_col) {
+                # if (!defined $source_columns{$loc_src_col}) {
+                    # say 'добавили: ' . $loc_src_col;
+                    # show_src_caption($fields);
+                    # push @source_columns,
+                      # add_to_src($loc_src_col, $fields, $param_fields);
+                # }
+            # }
+
+        # }
+# }
+    # say 'get_source_sql_field_parsed!!';
+    #$field_name='ParsedDerivation'
+    # my @sql_user_fiendly = ();
+            # my %derivations      = ();
+          my @deriv_collect = ();
+        # my $field_body    = $sql_field->{SourceColumn};
+		
+       my ($parse_and_source, $pars_deriv, $source_col) =  calc_deriv($param_fields, $src_col);
+        while (defined $source_col) {
+            push @deriv_collect, $parse_and_source;
+            ($parse_and_source, $pars_deriv, $source_col) =  calc_deriv($param_fields, $source_col);
+        }
+
+ 
+    say '\@deriv_collect: ' . Dumper \@deriv_collect;#\@source_columns;
+
+# $source_columns{$fields->{Name}} =                add_to_src($loc_src_col, $fields, $param_fields);
 {
 	    name  => $src_col,
         src_link  => $src_link,
@@ -600,11 +652,13 @@ sub get_full_source {
         }
         $unic_links = make_uniq_links(\@collect);
 
-# $tree_of_source =          get_full_source_center($unic_links, $param_fields, $sql_field,            $stage_name);
+        $tree_of_source =
+          get_full_source_center($unic_links, $param_fields, $sql_field,
+            $stage_name);
     }
 
     # show_variable(Dumper $stage_lines, '$stage_lines');
-    return $unic_links;    #tree_of_source;    #\@collect;
+    return $tree_of_source;    #tree_of_source;    #\@collect;
 }
 
 sub make_uniq_links {
@@ -612,8 +666,9 @@ sub make_uniq_links {
     my @unic_links = ();
     for my $link (@{$collect}) {
         for my $loc_link (@{$link}) {
-            if (!any { $loc_link eq $_ } @unic_links) {
-                push @unic_links, $loc_link;
+            my $orig_link = get_link($loc_link);
+            if (!any { $orig_link eq $_ } @unic_links) {
+                push @unic_links, $orig_link;
             }
         }
     }
@@ -2590,18 +2645,20 @@ sub get_body_of_records {
     my $rec;
     my $curr_ref_array;
 
-    #my @OLEType = qw/CTrxOutput CCustomOutput CCustomStage $OLEType/;
+    my @OLEType = qw/CTrxOutput CCustomOutput CCustomStage $OLEType/;
     for my $rec1 (@{$rich_records}) {
         my $loc_name = $rec1->{'fields'}->{'Name'};
         my $loc_type = $rec1->{'fields'}->{'OLEType'};
 
         #any { $loc_type eq $_ } @OLEType
-        if ($loc_name eq $search_name && $loc_type eq $OLEType) {
+        # if ($loc_name eq $search_name && $loc_type eq $OLEType) {
+        if ($loc_name eq $search_name && any { $loc_type eq $_ } @OLEType) {
             $curr_ref_array = $rec1;
         }
     }
     return $curr_ref_array;
 }
+
 
 sub get_orchestrate_code {
     my ($rich_records, $seach_node) = @_;    #shift;
