@@ -357,19 +357,19 @@ sub get_body_of_stage {
 
     # dump_in_html(\%test,'test_'.$stage_name.'_n_'.$i.'.html');
 
-	
 
 #12.Ограничения для потока
- my $parsed_constraint = get_parsed_constraint($link_name, $param_fields);
+    my $parsed_constraint = get_parsed_constraint($link_name, $param_fields);
 
     #6.1 fields
-    my $fields_properties =
-      get_properties_sql_field($sql_fields, $stage_lines, $link_name,
-        $param_fields, $stage_name,$parsed_constraint);    #, 'Name' );
+    my $fields_properties = get_properties_sql_field(
+        $sql_fields,   $stage_lines, $link_name,
+        $param_fields, $stage_name,  $parsed_constraint
+    );    #, 'Name' );
 
     state $i= 1;
-    dump_in_html($fields_properties,
-        'fields_properties_' . $stage_name . '_n_' . $i . '.html');
+
+ dump_in_html($fields_properties,        'fields_properties_' . $stage_name . '_n_' . $i . '.html');
     $i++;
 
     # debug(1, $fields_properties);
@@ -400,9 +400,9 @@ sub get_body_of_stage {
 #11.Описание
     # my $descriptions = get_source_sql_field($sql_fields, 'Description');
 
-	
-	# my %deb=(link_name=>$link_name, param_fields=>$param_fields, parsed_constraint=>$parsed_constraint);
-	  # dump_in_html(\%deb,    'get_parsed_constraint_n_' . $i . '.html');
+
+# my %deb=(link_name=>$link_name, param_fields=>$param_fields, parsed_constraint=>$parsed_constraint);
+# dump_in_html(\%deb,    'get_parsed_constraint_n_' . $i . '.html');
 
 
 # $link_body->{fields}
@@ -456,8 +456,9 @@ sub get_arr_of_field {
 }
 
 sub get_properties_sql_field {
-    my ($sql_fields, $stage_lines, $link_name, $param_fields, $stage_name,$parsed_constraint) =
-      @_;
+    my ($sql_fields,   $stage_lines, $link_name,
+        $param_fields, $stage_name,  $parsed_constraint
+    ) = @_;
     my @sql_user_fiendly = ();
     for my $sql_field (@{$sql_fields}) {
         my %field_collect = ();
@@ -473,7 +474,7 @@ sub get_properties_sql_field {
         $field_collect{SourceColumn} = $sql_field->{SourceColumn};
         $field_collect{Full_Source} =
           get_full_source($sql_field, $stage_lines, $param_fields,
-            $stage_name,$parsed_constraint);
+            $stage_name, $parsed_constraint);
         $field_collect{Description} =
           from_dsx_2_utf($sql_field->{Description});
         push @sql_user_fiendly, \%field_collect;
@@ -492,19 +493,14 @@ sub show_src_caption {
 }
 
 sub add_to_src {
-    my ($sql_field, $param_fields,$parsed_constraint) = @_;
+    my ($sql_field, $param_fields, $parsed_constraint) = @_;
     my $src_col   = $sql_field->{SourceColumn};
     my %src_field = ();
     if (defined $src_col) {
-	if (! defined $parsed_constraint){
-	$parsed_constraint=get_parsed_constraint($src_col, $param_fields);
-	}
-	# my $link_body =   get_body_of_sql_records($param_fields, get_link($src_col));
-    # my $parsed_constraint= $link_body->{fields}->{'ParsedConstraint'};
-	state $i=1;
-    my %deb=(link_name=>$src_col,  parsed_constraint=>$parsed_constraint);#param_fields=>$param_fields,
-	  dump_in_html(\%deb,    'add_to_src_get_parsed_constraint_n_' . $i . '.html');
-	  $i++;
+        if (!defined $parsed_constraint) {
+            $parsed_constraint =
+              get_parsed_constraint($src_col, $param_fields);
+        }
         my ($src_link, $src_field) = get_link_field($src_col);
         %src_field = (
             name      => $src_col,
@@ -512,7 +508,7 @@ sub add_to_src {
             src_field => $src_field,
             parsed_derivation =>
               from_dsx_2_utf($sql_field->{ParsedDerivation}),
-            parsed_constraint =>        $parsed_constraint,
+            parsed_constraint => $parsed_constraint,
         );
     }
     return \%src_field;
@@ -524,11 +520,14 @@ sub get_link_field {
 }
 
 sub get_full_source_center {
-    my ($joined_links, $param_fields, $sql_field, $stage_name,$parsed_constraint) = @_;
+    my ($joined_links, $param_fields, $sql_field, $stage_name,
+        $parsed_constraint)
+      = @_;
     my @source_columns = ();
 
 # $source_columns{$sql_field->{SourceColumn}} =      add_to_src( $sql_field->{SourceColumn}, $sql_field, $param_fields);
-    my $curr_source = add_to_src($sql_field, $param_fields,$parsed_constraint);
+    my $curr_source =
+      add_to_src($sql_field, $param_fields, $parsed_constraint);
     push @source_columns, $curr_source;
 
     print '$curr_source: ' . (Dumper $curr_source);
@@ -549,32 +548,35 @@ sub get_full_source_center {
 
 
 sub get_full_source {
-    my ($sql_field, $stage_lines, $param_fields, $stage_name,$parsed_constraint) = @_;
+    my ($sql_field, $stage_lines, $param_fields, $stage_name,
+        $parsed_constraint)
+      = @_;
     my $src_col = $sql_field->{SourceColumn};
     my @collect = ();
     my ($tree_of_source, $unic_links);
     say 'get_full_source for $sql_field->{Name}: ' . $sql_field->{Name};
-    if (defined $src_col) {
-        show_src_caption($sql_field);
+    show_src_caption($sql_field);
 
 #нужно накапливать историю преобразований!
-        for my $rec (@{$stage_lines}) {
-            foreach my $el (keys %{$rec}) {
-
 #нужен просто цикл по всем линкам, если они есть
-                my $joined_links = join_link($rec->{$el});
-                push @collect, $joined_links;
-            }
+    for my $rec (@{$stage_lines}) {
+        foreach my $el (keys %{$rec}) {
+            my $joined_links = join_link($rec->{$el});
+            push @collect, $joined_links;
         }
-        $unic_links = make_uniq_links(\@collect);
-
-        $tree_of_source =
-          get_full_source_center($unic_links, $param_fields, $sql_field,
-            $stage_name,$parsed_constraint);
     }
-
-    # show_variable(Dumper $stage_lines, '$stage_lines');
-    return $tree_of_source;    #tree_of_source;    #\@collect;
+    $unic_links = make_uniq_links(\@collect);
+    $tree_of_source =
+      get_full_source_center($unic_links, $param_fields, $sql_field,
+        $stage_name, $parsed_constraint);
+    
+    #my $last_element=${$tree_of_source}[-1];
+    #$array[-1]
+    #my %grouping_parameters=();
+    #$grouping_parameters{source_link}=$last_element->{src_link};
+    
+  #%grouping_parameters;#
+    return $tree_of_source;
 }
 
 sub make_uniq_links {
