@@ -524,8 +524,6 @@ sub get_full_source_center {
         $parsed_constraint)
       = @_;
     my @source_columns = ();
-
-# $source_columns{$sql_field->{SourceColumn}} =      add_to_src( $sql_field->{SourceColumn}, $sql_field, $param_fields);
     my $curr_source =
       add_to_src($sql_field, $param_fields, $parsed_constraint);
     push @source_columns, $curr_source;
@@ -570,13 +568,25 @@ sub get_full_source {
       get_full_source_center($unic_links, $param_fields, $sql_field,
         $stage_name, $parsed_constraint);
     
+    #my @tree=
+    for my $elem (@{$tree_of_source}){
+		say '$tree_of_source reftype: '.reftype $elem;		
+		foreach my $el (keys %{$elem}) {
+            say 'key: '.$el;
+            say ' value: '.$elem->{$el} if defined $elem->{$el};		
+        }
+		};
+    #my $last_record=$tree[$#tree];#$tree[-1];
+    my %integrated_fields=(last_record=>$tree_of_source);
+    my %ret_hash=(fields=>$tree_of_source,
+    integrated_fields=>\%integrated_fields);
     #my $last_element=${$tree_of_source}[-1];
     #$array[-1]
     #my %grouping_parameters=();
     #$grouping_parameters{source_link}=$last_element->{src_link};
     
   #%grouping_parameters;#
-    return $tree_of_source;
+    return \%ret_hash;#$tree_of_source;
 }
 
 sub make_uniq_links {
