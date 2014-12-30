@@ -53,7 +53,10 @@ sub parse_dsx {
         $lines       = fill_way_and_links($links, $direction);
         $power_lines = add_links_to_lines($links, $lines);
 
+# dump_in_html($power_lines,'power_lines.html');
+# dump_in_html($lines,'lines.html');
         $lines = $power_lines;
+
 
         #     debug(1, $power_lines);
     }
@@ -237,12 +240,20 @@ sub make_mapping_job {
     my @fill_excel            = ();
     my $new_number_of_records = 0;
     my $rec_fields            = 3;
+
+    # dump_in_html($param_fields,'param_fields.html');
+    # dump_in_html($links,'links.html');
     for my $final_stage_for_draw (keys %start_stages_for_mapping) {
         $rec_fields = $rec_fields + $new_number_of_records;
+
 
         # say $rec_fields;
         my $link_body =
           get_body_of_stage($param_fields, $final_stage_for_draw, $links);
+
+
+        dump_in_html($link_body,
+            'link_body_' . $final_stage_for_draw . '.html');
 
         # print DumpTree( $link_body, '$link_body' );
         say ' $final_stage_for_draw: ' . $final_stage_for_draw;
@@ -332,45 +343,57 @@ sub get_body_of_stage {
     #sql поля есть
     my $sql_fields = get_sql_fields($param_fields, $link_name);
 
+    state $i= 1;
+
+    #my $i=0
+    dump_in_html($sql_fields,
+        'sql_fields_' . $table_name . '_n_' . $i . '.html');
+
     #6.fields
-    my $fields = get_source_sql_field($sql_fields, 'Name');
+    # my $fields = get_source_sql_field($sql_fields, 'Name');
     my $stage_lines = $param_fields->{job_prop}->{lines}->{$stage_name};
 
+    my %test = ();
+    @test{'sql_fields', 'stage_lines', 'link_name', 'param_fields',
+        'stage_name'} =
+      ($sql_fields, $stage_lines, $link_name, $param_fields, $stage_name);
+
+    # dump_in_html(\%test,'test_'.$stage_name.'_n_'.$i.'.html');
+    $i++;
 
     #6.1 fields
     my $fields_properties =
       get_properties_sql_field($sql_fields, $stage_lines, $link_name,
         $param_fields, $stage_name);    #, 'Name' );
 
-    debug(1, $fields_properties);
+  # dump_in_html($fields_properties,'fields_properties_'.$stage_name.'.html');
+  # debug(1, $fields_properties);
 
     # make_sql_fields_for_show($sql_fields);
     #say 'say $fields: ';
     #print Dumper $sql_fields;
     #print Dumper $fields;
     #7.types
-    my $types = get_sql_types($sql_fields, $fields);
+    # my $types = get_sql_types($sql_fields, $fields);
 
     #8.Вхождение в ключ
-    my $key = get_sql_keys($sql_fields, $fields);
+    # my $key = get_sql_keys($sql_fields, $fields);
 
     #9.Обязательность
-    my $nullable = get_sql_mandatory($sql_fields, $fields);
+    # my $nullable = get_sql_mandatory($sql_fields, $fields);
 
-    #10.Формула
-    my $parsedderivation =
-      get_source_sql_field($sql_fields, 'ParsedDerivation', $param_fields);
+#10.Формула
+# my $parsedderivation =      get_source_sql_field($sql_fields, 'ParsedDerivation', $param_fields);
 
-    # get_source_sql_field($sql_fields, 'ParsedDerivation');
-    #10.Исходное поле
-    my $sourcecolumn =
-      get_source_sql_field_parsed($sql_fields, $param_fields, $stage_name);
+# get_source_sql_field($sql_fields, 'ParsedDerivation');
+#10.Исходное поле
+# my $sourcecolumn =      get_source_sql_field_parsed($sql_fields, $param_fields, $stage_name);
 
 #10.Если $sourcecolumn
 #address_insert.STRNAM;address_insert.HOUSE;address_insert.CORP;address_insert.FLAT
 #то нужно разделить строку на число источников
 #11.Описание
-    my $descriptions = get_source_sql_field($sql_fields, 'Description');
+    # my $descriptions = get_source_sql_field($sql_fields, 'Description');
 
 
 #12.Ограничения для потока
@@ -717,8 +740,8 @@ sub get_parsed_constraint {
     my $in_link_name = $link_name;
     my $in_real_link_name =
       substr($in_link_name, index($in_link_name, ':') + 1);
-    my $link_body =
-      get_body_of_records($param_fields, $in_real_link_name, 'CTrxOutput');
+    my $link_body = get_body_of_sql_records($param_fields, $in_real_link_name,
+        'CTrxOutput');
 
     my $constraint = $link_body->{fields}->{'ParsedConstraint'};
     if (defined $constraint) {
@@ -1569,9 +1592,15 @@ sub get_xml_properties {
 
 sub get_sql_fields {
     my ($param_fields, $link_name) = @_;
-    my $OLEType = 'CTrxOutput';    # qw/CTrxOutput CCustomOutput/;
+
+    # my $OLEType = 'CTrxOutput';    # qw/CTrxOutput CCustomOutput/;
     my $link_body =
-      get_parsed_fields_from_all($param_fields, $link_name, $OLEType);
+      get_body_of_sql_records($param_fields, get_link($link_name))
+      ;    #, $OLEType);
+
+    state $i= 1;
+    dump_in_html($link_body, 'link_body_n_' . $i . '.html');
+    $i++;
 
     # say '$link_body: '.(Dumper $link_body);
     my $sql_fields  = $link_body->{subrecord_body};
@@ -1582,6 +1611,58 @@ sub get_sql_fields {
         }
     }
     return \@sql_records;
+}
+
+sub get_body_of_sql_records {
+    my ($param_fields, $search_name) = @_;    #, $OLEType)
+    my $OLEType      = 'CTrxOutput';
+    my $rich_records = $param_fields->{job_prop}->{rich_records};
+    my $rec;
+    my $curr_ref_array;
+
+    # my @OLEType = qw/CTrxOutput CCustomOutput CCustomStage $OLEType/;
+    for my $rec1 (@{$rich_records}) {
+        my $loc_name = $rec1->{'fields'}->{'Name'};
+        my $loc_type = $rec1->{'fields'}->{'OLEType'};
+
+        #any { $loc_type eq $_ } @OLEType
+        if ($loc_name eq $search_name && $loc_type eq $OLEType) {
+
+        # if ($loc_name eq $search_name && any { $loc_type eq $_ } @OLEType) {
+            $curr_ref_array = $rec1;
+        }
+    }
+    return $curr_ref_array;
+}
+
+
+sub get_body_of_records {
+    my ($param_fields, $search_name, $OLEType) = @_;
+    my $rich_records = $param_fields->{job_prop}->{rich_records};
+    my $rec;
+    my $curr_ref_array;
+
+    my @OLEType = qw/CTrxOutput CCustomOutput CCustomStage $OLEType/;
+    for my $rec1 (@{$rich_records}) {
+        my $loc_name = $rec1->{'fields'}->{'Name'};
+        my $loc_type = $rec1->{'fields'}->{'OLEType'};
+
+        #any { $loc_type eq $_ } @OLEType
+        # if ($loc_name eq $search_name && $loc_type eq $OLEType) {
+        if ($loc_name eq $search_name && any { $loc_type eq $_ } @OLEType) {
+            $curr_ref_array = $rec1;
+        }
+    }
+    return $curr_ref_array;
+}
+
+sub get_parsed_fields_from_all {
+    my ($param_field, $link_name, $OLEType) = @_;
+
+    my $fields =
+      get_body_of_records($param_field, get_link($link_name), $OLEType);
+
+    return $fields;
 }
 
 sub pexcel_head {
@@ -1621,25 +1702,25 @@ sub pexcel_table_links {
     return $max;
 }
 
-sub get_parsed_fields_from_all {
-    my ($param_field, $link_name, $OLEType) = @_;
-    my %deb_vars = ();
-    @deb_vars{'param_field', 'link_name'} = ($param_field, $link_name);
-    my $char         = ':';
-    my $in_link_name = $link_name;
-    my $in_real_link_name =
-      substr($in_link_name, index($in_link_name, ':') + 1);
+# sub get_parsed_fields_from_all {
+# my ($param_field, $link_name, $OLEType) = @_;
+# my %deb_vars = ();
+# @deb_vars{'param_field', 'link_name'} = ($param_field, $link_name);
+# my $char         = ':';
+# my $in_link_name = $link_name;
+# my $in_real_link_name =
+# substr($in_link_name, index($in_link_name, ':') + 1);
 
-    # say 'in_real_link_name 14:42: ' . $in_real_link_name;
-    # say '$OLEType 14:42: ' . $OLEType;
-    # debug( 1, $param_field);
-    #my $OLEType = 'CTrxOutput';
-    my $fields =
-      get_body_of_records($param_field, $in_real_link_name, $OLEType);
+# # say 'in_real_link_name 14:42: ' . $in_real_link_name;
+# # say '$OLEType 14:42: ' . $OLEType;
+# # debug( 1, $param_field);
+# #my $OLEType = 'CTrxOutput';
+# my $fields =
+# get_body_of_records($param_field, $in_real_link_name, $OLEType);
 
-    # debug( 1, $fields);
-    return $fields;
-}
+# # debug( 1, $fields);
+# return $fields;
+# }
 
 sub pexcel_all {
     my ($j, $col, $param_fields, $name, $format_name, $curr_job) = @_;
@@ -2640,26 +2721,6 @@ sub parse_orchestrate_body {
     return \@parsed_dsx;
 }
 
-sub get_body_of_records {
-    my ($param_fields, $search_name, $OLEType) = @_;
-    my $rich_records = $param_fields->{job_prop}->{rich_records};
-    my $rec;
-    my $curr_ref_array;
-
-    my @OLEType = qw/CTrxOutput CCustomOutput CCustomStage $OLEType/;
-    for my $rec1 (@{$rich_records}) {
-        my $loc_name = $rec1->{'fields'}->{'Name'};
-        my $loc_type = $rec1->{'fields'}->{'OLEType'};
-
-        #any { $loc_type eq $_ } @OLEType
-        # if ($loc_name eq $search_name && $loc_type eq $OLEType) {
-        if ($loc_name eq $search_name && any { $loc_type eq $_ } @OLEType) {
-            $curr_ref_array = $rec1;
-        }
-    }
-    return $curr_ref_array;
-}
-
 
 sub get_orchestrate_code {
     my ($rich_records, $seach_node) = @_;    #shift;
@@ -2839,15 +2900,16 @@ sub parse_records {
 
 sub debug {
     my ($run_as_a_one, $value) = @_;
+    my $file_name = 'dump.html';
     state $i= 1;
     if (($i == 1) || ($run_as_a_one != 1)) {
-        dump_in_html($value);
+        dump_in_html($value, $file_name);
     }
     $i++;
 }
 
 sub dump_in_html {
-    my ($job_and_formats) = @_;
+    my ($job_and_formats, $file_name) = @_;
 
 #-------------------------------------------------------------------------------
 # the renderer can return a default style. This is needed as styles must be at the top of the document
@@ -2909,7 +2971,7 @@ $body2
 </body>
 </html>
 EOT
-    write_file_utf8('dump.html', $dump);
+    write_file_utf8($file_name, $dump);
 
 #-------------------------------------------------------------------------------
 }
