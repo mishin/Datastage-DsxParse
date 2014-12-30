@@ -252,8 +252,7 @@ sub make_mapping_job {
           get_body_of_stage($param_fields, $final_stage_for_draw, $links);
 
 
-        dump_in_html($link_body,
-            'link_body_' . $final_stage_for_draw . '.html');
+# dump_in_html($link_body,            'link_body_' . $final_stage_for_draw . '.html');
 
         # print DumpTree( $link_body, '$link_body' );
         say ' $final_stage_for_draw: ' . $final_stage_for_draw;
@@ -343,11 +342,9 @@ sub get_body_of_stage {
     #sql поля есть
     my $sql_fields = get_sql_fields($param_fields, $link_name);
 
-    state $i= 1;
 
-    #my $i=0
-    dump_in_html($sql_fields,
-        'sql_fields_' . $table_name . '_n_' . $i . '.html');
+#my $i=0
+# dump_in_html($sql_fields,        'sql_fields_' . $table_name . '_n_' . $i . '.html');
 
     #6.fields
     # my $fields = get_source_sql_field($sql_fields, 'Name');
@@ -359,15 +356,23 @@ sub get_body_of_stage {
       ($sql_fields, $stage_lines, $link_name, $param_fields, $stage_name);
 
     # dump_in_html(\%test,'test_'.$stage_name.'_n_'.$i.'.html');
-    $i++;
+
+	
+
+#12.Ограничения для потока
+ my $parsed_constraint = get_parsed_constraint($link_name, $param_fields);
 
     #6.1 fields
     my $fields_properties =
       get_properties_sql_field($sql_fields, $stage_lines, $link_name,
-        $param_fields, $stage_name);    #, 'Name' );
+        $param_fields, $stage_name,$parsed_constraint);    #, 'Name' );
 
-  # dump_in_html($fields_properties,'fields_properties_'.$stage_name.'.html');
-  # debug(1, $fields_properties);
+    state $i= 1;
+    dump_in_html($fields_properties,
+        'fields_properties_' . $stage_name . '_n_' . $i . '.html');
+    $i++;
+
+    # debug(1, $fields_properties);
 
     # make_sql_fields_for_show($sql_fields);
     #say 'say $fields: ';
@@ -395,9 +400,9 @@ sub get_body_of_stage {
 #11.Описание
     # my $descriptions = get_source_sql_field($sql_fields, 'Description');
 
-
-#12.Ограничения для потока
-    my $parsed_constraint = get_parsed_constraint($link_name, $param_fields);
+	
+	# my %deb=(link_name=>$link_name, param_fields=>$param_fields, parsed_constraint=>$parsed_constraint);
+	  # dump_in_html(\%deb,    'get_parsed_constraint_n_' . $i . '.html');
 
 
 # $link_body->{fields}
@@ -417,14 +422,16 @@ sub get_body_of_stage {
     return $big_array;
 }
 
+# my $files_to_send = [ map {"$stage/$_.pdf"} @{$self->_getGood()} ];
+# @entity_array = map { $values_4_show->{$entity} } @{$fields};
+# @entity_array = map { $values_4_show->{$entity} } @{$fields};
+
 sub make_data_4_show {
     my ($values_4_show, $fields) = @_;
     my @big_array = ();
 
     for my $entity ('project', 'job', 'server', 'schema', 'table_name') {
-        my @entity_array = ();
-        @entity_array = map { $values_4_show->{$entity} } @{$fields};
-        push @big_array, \@entity_array;
+        push @big_array, [map { $values_4_show->{$entity} } @{$fields}];
     }
 
     for my $field_name (
@@ -434,11 +441,8 @@ sub make_data_4_show {
     }
 
     for my $entity ('parsed_constraint') {
-        my @entity_array = ();
-        @entity_array = map { $values_4_show->{$entity} } @{$fields};
-        push @big_array, \@entity_array;
+        push @big_array, [map { $values_4_show->{$entity} } @{$fields}];
     }
-
     return \@big_array;
 }
 
@@ -452,7 +456,7 @@ sub get_arr_of_field {
 }
 
 sub get_properties_sql_field {
-    my ($sql_fields, $stage_lines, $link_name, $param_fields, $stage_name) =
+    my ($sql_fields, $stage_lines, $link_name, $param_fields, $stage_name,$parsed_constraint) =
       @_;
     my @sql_user_fiendly = ();
     for my $sql_field (@{$sql_fields}) {
@@ -469,7 +473,7 @@ sub get_properties_sql_field {
         $field_collect{SourceColumn} = $sql_field->{SourceColumn};
         $field_collect{Full_Source} =
           get_full_source($sql_field, $stage_lines, $param_fields,
-            $stage_name);
+            $stage_name,$parsed_constraint);
         $field_collect{Description} =
           from_dsx_2_utf($sql_field->{Description});
         push @sql_user_fiendly, \%field_collect;
@@ -488,10 +492,19 @@ sub show_src_caption {
 }
 
 sub add_to_src {
-    my ($sql_field, $param_fields) = @_;
+    my ($sql_field, $param_fields,$parsed_constraint) = @_;
     my $src_col   = $sql_field->{SourceColumn};
     my %src_field = ();
     if (defined $src_col) {
+	if (! defined $parsed_constraint){
+	$parsed_constraint=get_parsed_constraint($src_col, $param_fields);
+	}
+	# my $link_body =   get_body_of_sql_records($param_fields, get_link($src_col));
+    # my $parsed_constraint= $link_body->{fields}->{'ParsedConstraint'};
+	state $i=1;
+    my %deb=(link_name=>$src_col,  parsed_constraint=>$parsed_constraint);#param_fields=>$param_fields,
+	  dump_in_html(\%deb,    'add_to_src_get_parsed_constraint_n_' . $i . '.html');
+	  $i++;
         my ($src_link, $src_field) = get_link_field($src_col);
         %src_field = (
             name      => $src_col,
@@ -499,8 +512,7 @@ sub add_to_src {
             src_field => $src_field,
             parsed_derivation =>
               from_dsx_2_utf($sql_field->{ParsedDerivation}),
-            parsed_constraint =>
-              get_parsed_constraint($src_link, $param_fields),
+            parsed_constraint =>        $parsed_constraint,
         );
     }
     return \%src_field;
@@ -512,11 +524,11 @@ sub get_link_field {
 }
 
 sub get_full_source_center {
-    my ($joined_links, $param_fields, $sql_field, $stage_name) = @_;
+    my ($joined_links, $param_fields, $sql_field, $stage_name,$parsed_constraint) = @_;
     my @source_columns = ();
 
 # $source_columns{$sql_field->{SourceColumn}} =      add_to_src( $sql_field->{SourceColumn}, $sql_field, $param_fields);
-    my $curr_source = add_to_src($sql_field, $param_fields);
+    my $curr_source = add_to_src($sql_field, $param_fields,$parsed_constraint);
     push @source_columns, $curr_source;
 
     print '$curr_source: ' . (Dumper $curr_source);
@@ -535,129 +547,9 @@ sub get_full_source_center {
     return \@source_columns;
 }
 
-=pod
-
-   if (defined $curr_source->{name}) {
-			say '3-й шаг не работает:'.$curr_source->{name};
-             ($src_link, $src_field) = get_link_field($curr_source->{name});
-			 say '3-й шаг не работает: $src_link: '.$src_link;
-			 say '3-й шаг не работает: $src_field: '.$src_field;
-             $fields = get_fields($param_fields, $src_link, $src_field);
-			 # say '3-й шаг не работает: $fields: '. (Dumper $fields);
-            $curr_source = add_to_src($fields, $param_fields);
-            push @source_columns, $curr_source;
-        }
-    # }
- # my $src_col        = $sql_field->{SourceColumn};    #$sql_field->{Name}
-    # my %source_columns = ();
-    # my @source_columns = ();
-    # # my ($src_link, $src_field) = get_link_field($src_col);
-    # say 'get_full_source_center for $src_col: ' . $src_col;
-    # $source_columns{$src_col} =      add_to_src($src_col, $sql_field, $param_fields);
-    # push @source_columns, add_to_src($src_col, $sql_field, $param_fields);
-
-    # my $loc_src_col;
-    # for my $stage_link (@{$joined_links}) {
-        # my $i = 1;
-        # if (defined $loc_src_col) {
-            # ($src_link, $src_field) = get_link_field($loc_src_col);
-            # say 'мы здесь: ' . $src_col . ' ' . $i++ . ' раз';
-        # }
-        # else {
-            # $loc_src_col = $src_col;
-        # }
-        # say '    ' . $stage_link;
-        # my $loc_link = get_link($stage_link);
-        # my $parsed_constraint =
-          # get_parsed_constraint($loc_link, $param_fields);
-        # show_variable($parsed_constraint, '$parsed_constraint');
-
-# #Если линк текущего поля совпадает с линком в дереве
-        # if ($src_link eq $loc_link) {
-            # my $fields = get_fields($param_fields, $src_link, $src_field);
-            # $loc_src_col = $fields->{SourceColumn};
-			# say '$loc_src_col: '.$loc_src_col;
-            # if (defined $loc_src_col) {
-                # if (!defined $source_columns{$loc_src_col}) {
-                    # say 'добавили: ' . $loc_src_col;
-                    # show_src_caption($fields);
-                    # push @source_columns,
-                      # add_to_src($loc_src_col, $fields, $param_fields);
-                # }
-            # }
-
-        # }
-# }
-    # say 'get_source_sql_field_parsed!!';
-    #$field_name='ParsedDerivation'
-    # my @sql_user_fiendly = ();
-            # my %derivations      = ();
-          my @deriv_collect = ();
-        # my $field_body    = $sql_field->{SourceColumn};
-		
-       my ($parse_and_source, $pars_deriv, $source_col) =  calc_deriv($param_fields, $src_col);
-        while (defined $source_col) {
-            push @deriv_collect, $parse_and_source;
-            ($parse_and_source, $pars_deriv, $source_col) =  calc_deriv($param_fields, $source_col);
-        }
-
- 
-    say '\@deriv_collect: ' . Dumper \@deriv_collect;#\@source_columns;
-
-# $source_columns{$fields->{Name}} =                add_to_src($loc_src_col, $fields, $param_fields);
-{
-	    name  => $src_col,
-        src_link  => $src_link,
-        src_field => $src_field,
-        parsed_derivation => from_dsx_2_utf( $sql_field->{ParsedDerivation} ),
-        parsed_constraint =>  get_parsed_constraint($src_link, $param_fields) ,
-    };
-            my $parsed_derivation = $fields->{ParsedDerivation};
-            if (defined $parsed_derivation) {
-                $parsed_derivation =~ s{\\'}{'}g;
-                say 'ParsedDerivation: ' . $parsed_derivation;
-            }
-            my $source_column = $fields->{SourceColumn};
-            if (defined $source_column) {
-                say 'SourceColumn: ' . $source_column;
-            }
-
-думаю, что это   qw/stage_name input_links output_links operator_name/		
-- плохая идея, теряется управляемость
-
-  if (!(     $rec->{$el}{operator_name} eq 'copy'
-                                    && $key eq 'output_links'
-                                )
-                              )
-                            {
-							 }
-							 # for my $key (
-# qw/stage_name input_links
-# output_links operator_name/
-# )
-# {
-                # my $key_value    = $rec->{$el}{input_links};
-                # my $key_value    = $rec->{$el}{output_links};
-				
-				
-                if (defined $key_value) {
-                    say "$key: ";
-                    if (defined reftype $key_value
-                        && reftype $key_value eq 'ARRAY')
-                    {
-
-
-                        push @collect,
-                          get_full_source_center($rec, $param_fields, $el,
-                            $key, $sql_field, $stage_name);
-
-                    }
-                    else { say '    ' . $key_value }
-                }
-=cut
 
 sub get_full_source {
-    my ($sql_field, $stage_lines, $param_fields, $stage_name) = @_;
+    my ($sql_field, $stage_lines, $param_fields, $stage_name,$parsed_constraint) = @_;
     my $src_col = $sql_field->{SourceColumn};
     my @collect = ();
     my ($tree_of_source, $unic_links);
@@ -678,7 +570,7 @@ sub get_full_source {
 
         $tree_of_source =
           get_full_source_center($unic_links, $param_fields, $sql_field,
-            $stage_name);
+            $stage_name,$parsed_constraint);
     }
 
     # show_variable(Dumper $stage_lines, '$stage_lines');
@@ -737,19 +629,9 @@ sub get_fields {
 
 sub get_parsed_constraint {
     my ($link_name, $param_fields) = @_;
-    my $in_link_name = $link_name;
-    my $in_real_link_name =
-      substr($in_link_name, index($in_link_name, ':') + 1);
-    my $link_body = get_body_of_sql_records($param_fields, $in_real_link_name,
-        'CTrxOutput');
-
-    my $constraint = $link_body->{fields}->{'ParsedConstraint'};
-    if (defined $constraint) {
-        return $constraint;
-    }
-    else {
-        return 'no parsed_constraint';
-    }
+    my $link_body =
+      get_body_of_sql_records($param_fields, get_link($link_name));
+    return $link_body->{fields}->{'ParsedConstraint'};
 }
 
 sub get_parsed_constraint_from_link {
@@ -1102,8 +984,11 @@ sub get_link {
     if ($name =~ /[.]/) {
         return substr($name, 0, index($name, '.'));
     }
-    if ($name =~ /[:]/) {
+    elsif ($name =~ /[:]/) {
         return substr($name, index($name, ':') + 1);
+    }
+    else {
+        return $name;
     }
 }
 
@@ -1598,9 +1483,9 @@ sub get_sql_fields {
       get_body_of_sql_records($param_fields, get_link($link_name))
       ;    #, $OLEType);
 
-    state $i= 1;
-    dump_in_html($link_body, 'link_body_n_' . $i . '.html');
-    $i++;
+    # state $i= 1;
+    # dump_in_html($link_body, 'link_body_n_' . $i . '.html');
+    # $i++;
 
     # say '$link_body: '.(Dumper $link_body);
     my $sql_fields  = $link_body->{subrecord_body};
