@@ -498,16 +498,17 @@ sub get_full_source_center {
 
     print '$curr_source: ' . (Dumper $curr_source);
     my ($src_link, $src_field, $fields);
-    for my $stage_link (@{$joined_links}) {
+  EMPTY_LINK: for my $stage_link (@{$joined_links}) {
         if (defined $curr_source->{name}) {
             ($src_link, $src_field) = get_link_field($curr_source->{name});
             $fields = get_fields($param_fields, $src_link, $src_field);
             $curr_source = add_to_src($fields, $param_fields);
+            if (!defined $curr_source->{name}) {
+                last EMPTY_LINK;
+            }
             push @source_columns, $curr_source;
         }
     }
-
-
     return \@source_columns;
 }
 
