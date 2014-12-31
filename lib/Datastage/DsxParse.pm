@@ -45,12 +45,14 @@ sub parse_dsx {
       get_orchestrate_code($rich_records, 'OrchestrateCode');
 
     # say '14:40';
-    my ($parsed_dsx, $links, $direction, $lines, $power_lines);
+    my ($parsed_dsx, $links, $direction, $lines, $power_lines,$start_lines);
     if (defined $orchestrate_code) {
         $parsed_dsx  = parse_orchestrate_body($orchestrate_code);
         $links       = reformat_links($parsed_dsx);
         $direction   = 'end';
         $lines       = fill_way_and_links($links, $direction);
+        $direction   = 'start';
+        $start_lines       = fill_way_and_links($links, $direction);
         $power_lines = add_links_to_lines($links, $lines);
 
 # dump_in_html($power_lines,'power_lines.html');
@@ -64,11 +66,11 @@ sub parse_dsx {
     @job_prop{
         'header_and_job', 'header_fields', 'rich_records',
         'parsed_dsx',     'links',         'direction',
-        'lines',          'power_lines'
+        'lines',          'power_lines','start_lines'
       }
       = (
         $header_and_job, $header_fields, $rich_records, $parsed_dsx, $links,
-        $direction, $lines, $power_lines
+        $direction, $lines, $power_lines,$start_lines
       );
 
     # 'header_and_job', 'header_fields',
