@@ -325,15 +325,7 @@ sub get_body_of_stage {
     #3.ПРИЕМНИК ДАННЫХ или сервер
     my $server = get_server_name($xml_fields, \%table_comp);    #
 
-# $xml_fields->{Connection}->{DataSource}->{content} // $xml_fields->{Connection}->{Database}->{content};
-#say '$xml_fields->{Connection}: '.(Dumper $xml_fields->{Connection}->{Database}->{content});
-#say '$server1: ' . $server;
-#if ( !defined $server ) {
-# $server = $table_comp{server};
-# say '$server2: '.$server;
-#}
-#say '$server: '.$server;
-#4.schema
+    #4.schema
     my $schema = $table_comp{schema};
 
     #5.table
@@ -369,7 +361,9 @@ sub get_body_of_stage {
 
     state $i= 1;
 
- dump_in_html($fields_properties,        'fields_properties_' . $stage_name . '_n_' . $i . '.html');
+    dump_in_html($fields_properties,
+        'fields_properties_' . $stage_name . '_n_' . $i . '.html');
+    dump_in_html($links, 'links' . $stage_name . '_n_' . $i . '.html');
     $i++;
 
     # debug(1, $fields_properties);
@@ -482,6 +476,30 @@ sub get_properties_sql_field {
     return \@sql_user_fiendly;
 }
 
+
+sub get_properties_sql_field_src {
+    my ($sql_fields, $stage_lines, $link_name, $param_fields, $stage_name,) =
+      @_;
+    my @sql_user_fiendly = ();
+    for my $sql_field (@{$sql_fields}) {
+        my %field_collect = ();
+        $field_collect{Name} = $sql_field->{Name};
+        $field_collect{Type} =
+          decode_sql_type($sql_field->{SqlType}, $sql_field->{Precision});
+        $field_collect{Key} =
+          ($sql_field->{KeyPosition} == '1') ? 'ДА' : 'НЕТ';
+        $field_collect{Nullable} =
+          ($sql_field->{Nullable} == '1') ? 'НЕТ' : 'ДА';
+        $field_collect{ParsedDerivation} =
+          from_dsx_2_utf($sql_field->{ParsedDerivation});
+        $field_collect{SourceColumn} = $sql_field->{SourceColumn};
+        $field_collect{Description} =
+          from_dsx_2_utf($sql_field->{Description});
+        push @sql_user_fiendly, \%field_collect;
+    }
+    return \@sql_user_fiendly;
+}
+
 sub show_src_caption {
     my ($sql_field) = @_;
     show_variable($sql_field->{Name},         '$sql_field->{Name}');
@@ -523,15 +541,23 @@ sub get_full_source_center {
     my ($joined_links, $param_fields, $sql_field, $stage_name,
         $parsed_constraint)
       = @_;
-    my @source_columns = ();
+    my @source_columns              = ();
+    my @aggregate_parsed_derivation = ();
+    my @aggregate_parsed_constraint = ();
     my $curr_source =
       add_to_src($sql_field, $param_fields, $parsed_constraint);
     push @source_columns, $curr_source;
 
-    print '$curr_source: ' . (Dumper $curr_source);
-    my ($src_link, $src_field, $fields);
+    push @aggregate_parsed_derivation,
+      collect_aggegate_parsed_derivation($curr_source);
+    push @aggregate_parsed_constraint, $curr_source->{parsed_constraint};
+
+
+    my ($src_link, $src_field, $fields, $link, $field);
   EMPTY_LINK: for my $stage_link (@{$joined_links}) {
         if (defined $curr_source->{name}) {
+            $link  = $curr_source->{src_link};
+            $field = $curr_source->{name};
             ($src_link, $src_field) = get_link_field($curr_source->{name});
             $fields = get_fields($param_fields, $src_link, $src_field);
             $curr_source = add_to_src($fields, $param_fields);
@@ -539,9 +565,135 @@ sub get_full_source_center {
                 last EMPTY_LINK;
             }
             push @source_columns, $curr_source;
+            push @aggregate_parsed_derivation,
+              collect_aggegate_parsed_derivation($curr_source);
+            push @aggregate_parsed_constraint,
+              $curr_source->{parsed_constraint};
         }
     }
-    return \@source_columns;
+    my $delimiter = "\n";
+    my $aggregate_parsed_derivation = join "\n", grep defined,
+      @aggregate_parsed_derivation;
+    my $aggregate_parsed_constraint = join "\n", grep defined,
+      @aggregate_parsed_constraint;
+    my $src_param;
+    if (defined $link) {
+        my $src_param = get_source_param($param_fields, $link);
+    }
+    my %aggregate_hash = (
+        link                        => $link,
+        field                       => $field,
+        aggregate_parsed_derivation => $aggregate_parsed_derivation,
+        aggregate_parsed_constraint => $aggregate_parsed_constraint,
+    );
+    my %full_source = (
+        source_columns   => \@source_columns,
+        aggregate_values => \%aggregate_hash,
+        src_param        => $src_param
+    );
+    # print '$full_source: ' . (Dumper \%full_source);
+
+    return (\%full_source);
+}
+
+sub get_stage_name_from_link {
+    my ($links, $link) = @_;
+
+    # say 'ZZ_22';
+    my $stage_name;
+    for my $loc_stage (@{$links}) {
+
+        #output_links|  |  `- 0 = MART_UREP_WRH_DS:L100
+        for my $in_link_name (@{$loc_stage->{output_links}}) {
+            my $loc_link = get_link($in_link_name);
+
+#            say '$loc_link eq $link: '."$loc_link eq $link";
+            if ($loc_link eq $link) {
+                $stage_name = $loc_stage->{stage_name};
+
+                # say 'ZZ_21:'.$stage_name;
+                # say Dumper $loc_stage;
+            }
+        }
+    }
+    return $stage_name;
+}
+
+sub get_source_param {
+    my ($param_fields, $link) = @_;
+    my $links = $param_fields->{job_prop}->{links};
+    my $stage_name = get_stage_name_from_link($links, $link);
+    say '$stage_name: ' . $stage_name;
+
+# return $stage_name;
+
+    my $stage_body = get_stage($links, $stage_name);
+
+    #my $link_name = $stage_body->{'input_links'}[0];
+
+    #say 'link_name: ' . $link_name;
+    my $xml_prop = get_xml_properties($param_fields, $stage_name);
+    say '$stage_name: ' . $stage_name;
+    my $xml_fields = parse_xml_properties($xml_prop);
+
+    my $link_name = $link;
+
+    #получаем схему и имя таблицы
+    #или путь и имя файла или датасета
+    my %table_comp = get_table_ds_file_name(
+        $stage_body, $stage_name, $param_fields,
+        $link_name,  $xml_prop,   $xml_fields
+    );
+
+#итак собираем excel
+#
+# ServerName "SDBDS2"
+# ToolInstanceID "MASTER_for_CDB"
+#1.project
+# my $header_flds = $param_fields->{job_prop}->{header_fields};
+# my $project = $header_flds->{ServerName} . '/' . $header_flds->{ToolInstanceID};
+
+#2. Job - есть!!!
+# my $job = get_job_name($param_fields->{job_prop}->{rich_records},    'CJobDefn', 'Name');
+
+    #3.ПРИЕМНИК ДАННЫХ или сервер
+    my $server = get_server_name($xml_fields, \%table_comp);    #
+
+    #4.schema
+    my $schema = $table_comp{schema};
+
+    #5.table
+    my $table_name = $table_comp{table_name};
+
+    #sql поля есть
+    my $sql_fields = get_sql_fields($param_fields, $link_name);
+
+
+#my $i=0
+# dump_in_html($sql_fields,        'sql_fields_' . $table_name . '_n_' . $i . '.html');
+
+    #6.fields
+    # my $fields = get_source_sql_field($sql_fields, 'Name');
+    my $stage_lines = $param_fields->{job_prop}->{lines}->{$stage_name};
+
+    my $fields_properties =
+      get_properties_sql_field($sql_fields, $stage_lines, $link_name,
+        $param_fields, $stage_name);    #, 'Name' );
+
+#=cut
+    return $fields_properties;
+}
+
+sub collect_aggegate_parsed_derivation {
+    my ($curr_source) = @_;
+    if (defined $curr_source->{parsed_derivation}
+        && $curr_source->{name} ne $curr_source->{parsed_derivation})
+    {
+        return $curr_source->{parsed_derivation};
+    }
+    else {
+        return undef;
+    }
 }
 
 
@@ -567,26 +719,26 @@ sub get_full_source {
     $tree_of_source =
       get_full_source_center($unic_links, $param_fields, $sql_field,
         $stage_name, $parsed_constraint);
-    
+
     #my @tree=
-    for my $elem (@{$tree_of_source}){
-		say '$tree_of_source reftype: '.reftype $elem;		
-		foreach my $el (keys %{$elem}) {
-            say 'key: '.$el;
-            say ' value: '.$elem->{$el} if defined $elem->{$el};		
-        }
-		};
+#    for my $elem (@{$tree_of_source}){
+#		say '$tree_of_source reftype: '.reftype $elem;
+#		foreach my $el (keys %{$elem}) {
+#            say 'key: '.$el;
+#            say ' value: '.$elem->{$el} if defined $elem->{$el};
+#        }
+#		};
     #my $last_record=$tree[$#tree];#$tree[-1];
-    my %integrated_fields=(last_record=>$tree_of_source);
-    my %ret_hash=(fields=>$tree_of_source,
-    integrated_fields=>\%integrated_fields);
+    #my %integrated_fields=(last_record=>$tree_of_source);
+    #my %ret_hash=(fields=>$tree_of_source,
+    #integrated_fields=>\%integrated_fields);
     #my $last_element=${$tree_of_source}[-1];
     #$array[-1]
     #my %grouping_parameters=();
     #$grouping_parameters{source_link}=$last_element->{src_link};
-    
-  #%grouping_parameters;#
-    return \%ret_hash;#$tree_of_source;
+
+    #%grouping_parameters;#
+    return $tree_of_source;
 }
 
 sub make_uniq_links {
@@ -1382,11 +1534,20 @@ END DSSUBRECORD
         }
         elsif ($type eq 'copy') {
 
-            # say 'ZZZ_14_52';
             #это датасет
             $link_name_for_ds = $stage_body->{'output_links'}[0];
 
            # $link_name_for_ds = get_ds_properties($param_fields, $link_name);
+            %table_comp = split_ds_to_consistency($link_name_for_ds);
+            $table_comp{server} = 'ДАТАСЕТ';
+        }
+        elsif ($type eq 'PxDataSet') {
+
+            #это датасет
+           # $link_name_for_ds = $stage_body->{'output_links'}[0];
+
+           $link_name_for_ds = get_ds_properties($param_fields, $link_name);
+		   say '$link_name_for_ds: '.$link_name_for_ds;
             %table_comp = split_ds_to_consistency($link_name_for_ds);
             $table_comp{server} = 'ДАТАСЕТ';
         }
