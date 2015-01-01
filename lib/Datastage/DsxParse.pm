@@ -571,11 +571,11 @@ my @deriv_collect=();
              
     if ($cnt > 1) {        
               my ($parse_and_source, $pars_deriv, $source_col) =
-          calc_deriv($param_fields, $field);
+          get_deriv($param_fields, $field);
         while (defined $source_col) {
             push @deriv_collect, $parse_and_source;
             ($parse_and_source, $pars_deriv, $source_col) =
-              calc_deriv($param_fields, $source_col);
+              get_deriv($param_fields, $source_col);
         }
         
         # $deriv_collect{$field} = \@deriv_collect;
@@ -633,12 +633,42 @@ my @deriv_collect=();
     return (\%full_source);
 }
 
+sub get_deriv {
+    my ($param_fields, $source_col) = @_;
+    my ($cnt,          $src_fields) = is_multiple_source($source_col);
+    my ($parse_and_source, $pars_deriv);
+    if ($cnt > 1) {
+        my @out = ();
+        for my $field (@{$src_fields}) {
+            my @loc_param = ();
+            ($parse_and_source, $pars_deriv, $source_col) =
+              calc_deriv_single($param_fields, $field);
+            @loc_param = ($parse_and_source, $pars_deriv, $source_col);
+            push @out, \@loc_param;
+
+        # push @sql_user_fiendly, from_dsx_2_utf( $sql_field->{$field_name} );
+        }
+        return (\@out, $pars_deriv, $source_col);
+    }
+    else {
+        my ($loc_orig_link, $loc_orig_fld) = split(/[.]/, $source_col);
+        my $parse_and_source =
+          get_source_and_derivation($param_fields, $loc_orig_link,
+            $loc_orig_fld, $source_col);
+        my $pars_deriv =
+          $parse_and_source->{$source_col}->{parsed_derivation};
+        $source_col = $parse_and_source->{$source_col}->{source_column};
+        return ($parse_and_source, $pars_deriv, $source_col);
+    }
+}
+
+
 sub get_stage_name_from_link {
     my ($links, $link,$start_stages_for_source) = @_;
     my %d=();
     @d{'links', 'link','start_stages_for_source'}=($links, $link,$start_stages_for_source);
     state $i=1;
-     dump_in_html(\%d,'%d'.$i.'.html');
+     # dump_in_html(\%d,'%d'.$i.'.html');
     $i++;
 my %start=%{$start_stages_for_source};
     say 'get_stage_name_from_link';
