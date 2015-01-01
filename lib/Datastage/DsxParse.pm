@@ -99,7 +99,7 @@ sub add_links_to_lines {
 
                 #            say 'key: ' . $el . ' value: ' . $elem->{$el};
                 my $stage_name = $el;
-                my $links = get_links_by_stage_name($links, $stage_name);
+                my $links = get_stage($links, $stage_name);
 
                 #            say Dumper $links;
                 $elem->{$el} = $links;
@@ -110,17 +110,6 @@ sub add_links_to_lines {
     #show_variable( reftype $links,'ref_links');
     #show_variable( reftype $lines ,'ref_lines');
     return $lines;
-}
-
-sub get_links_by_stage_name {
-    my ($links, $stage_name) = @_;
-    my $stage_body;
-    for my $loc_stage (@{$links}) {
-        if ($loc_stage->{stage_name} eq $stage_name) {
-            $stage_body = $loc_stage;
-        }
-    }
-    return $stage_body;
 }
 
 sub make_excel_and_fill_header {
@@ -192,13 +181,25 @@ sub get_worksheet_by_name {
     return $curr_sheet;
 }
 
+sub get_start_stages_for_mapping{
+	my ($lines)=@_;
+	my %start_stages_for_mapping;
+	for my $key (keys %{$lines}) {
+        my @arr = @{$lines->{$key}};
+        for my $stage_name (keys %{$arr[0]}) {
+            $start_stages_for_mapping{$stage_name}++;
+        }
+    }
+    return \%start_stages_for_mapping;
+	}
+	
 sub make_mapping_job {
     my ($param_fields) = @_;
 
     # debug(1, $param_fields);
     my $workbook      = $param_fields->{workbook};
     my $loc_hash_prop = $param_fields->{job_prop};
-    my $lines         = $param_fields->{job_prop}->{lines};
+    # my $lines         = $param_fields->{job_prop}->{lines};
     my $ref_formats   = $param_fields->{ref_formats};
     my $job_name =
       get_orchestrate_code($param_fields->{job_prop}->{rich_records}, 'Name');
@@ -206,15 +207,11 @@ sub make_mapping_job {
       $workbook->add_worksheet(substr($job_name, -20) . '_mapping');
     $curr_job->activate();
     add_write_handler_autofit($curr_job);
-    my @deb_array                = ($lines);
-    my %start_stages_for_mapping = ();
+    # my @deb_array                = ($lines);
+    my %start_stages_for_mapping = %{get_start_stages_for_mapping($param_fields->{job_prop}->{lines})};
 
-    for my $key (keys %{$lines}) {
-        my @arr = @{$lines->{$key}};
-        for my $stage_name (keys %{$arr[0]}) {
-            $start_stages_for_mapping{$stage_name}++;
-        }
-    }
+
+    
     my $ref_fields = get_header_values();
     for my $field (@{$ref_fields}) {
         $curr_job->write($field->{coord}, $field->{caption},
@@ -233,10 +230,10 @@ sub make_mapping_job {
     my $j     = 3;
     my $col   = 7;
     my $links = $param_fields->{job_prop}->{links};
-    my %db    = (
-        'links'                      => $links,
-        '\%start_stages_for_mapping' => \%start_stages_for_mapping
-    );
+    # my %db    = (
+        # 'links'                      => $links,
+        # '\%start_stages_for_mapping' => \%start_stages_for_mapping
+    # );
 
     # debug(1, \%db);
     my @fill_excel            = ();
@@ -599,9 +596,9 @@ sub get_full_source_center {
 }
 
 sub get_stage_name_from_link {
-    my ($links, $link) = @_;
+    my ($links, $link,$start_stages_for_source) = @_;
 
-    # say 'ZZ_22';
+    say 'get_stage_name_from_link';
     my $stage_name;
     for my $loc_stage (@{$links}) {
 
@@ -610,7 +607,7 @@ sub get_stage_name_from_link {
             my $loc_link = get_link($in_link_name);
 
 #            say '$loc_link eq $link: '."$loc_link eq $link";
-            if ($loc_link eq $link) {
+            if ($loc_link eq $link && exists $start_stages_for_source->{$loc_stage->{stage_name}}) {
                 $stage_name = $loc_stage->{stage_name};
 
                 # say 'ZZ_21:'.$stage_name;
@@ -618,13 +615,16 @@ sub get_stage_name_from_link {
             }
         }
     }
+    
+    
     return $stage_name;
 }
 
 sub get_source_param {
     my ($param_fields, $link) = @_;
     my $links = $param_fields->{job_prop}->{links};
-    my $stage_name = get_stage_name_from_link($links, $link);
+    my %start_stages_for_source= %{get_start_stages_for_mapping($param_fields->{job_prop}->{start_lines})};
+    my $stage_name = get_stage_name_from_link($links, $link,\%start_stages_for_source);
     say '$stage_name: ' . $stage_name;
 
 # return $stage_name;
