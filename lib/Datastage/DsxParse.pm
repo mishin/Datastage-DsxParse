@@ -477,7 +477,7 @@ sub get_properties_sql_field {
 
 
 sub get_properties_sql_field_src {
-    my ($sql_fields, $stage_lines, $link_name, $param_fields, $stage_name,) =
+    my ($sql_fields, $link_name, $param_fields, $stage_name,) =
       @_;
     my @sql_user_fiendly = ();
     for my $sql_field (@{$sql_fields}) {
@@ -597,22 +597,29 @@ sub get_full_source_center {
 
 sub get_stage_name_from_link {
     my ($links, $link,$start_stages_for_source) = @_;
-
+    my %d=();
+    @d{'links', 'link','start_stages_for_source'}=($links, $link,$start_stages_for_source);
+    state $i=1;
+     dump_in_html(\%d,'%d'.$i.'.html');
+    $i++;
+my %start=%{$start_stages_for_source};
     say 'get_stage_name_from_link';
     my $stage_name;
     for my $loc_stage (@{$links}) {
 
         #output_links|  |  `- 0 = MART_UREP_WRH_DS:L100
-        for my $in_link_name (@{$loc_stage->{output_links}}) {
+        for my $type_link_name (qw/output_links output_links/){
+        for my $in_link_name (@{$loc_stage->{$type_link_name}}) {
             my $loc_link = get_link($in_link_name);
 
 #            say '$loc_link eq $link: '."$loc_link eq $link";
-            if ($loc_link eq $link && exists $start_stages_for_source->{$loc_stage->{stage_name}}) {
+            if ($loc_link eq $link && exists $start{$loc_stage->{stage_name}}) {
                 $stage_name = $loc_stage->{stage_name};
 
                 # say 'ZZ_21:'.$stage_name;
                 # say Dumper $loc_stage;
             }
+        }
         }
     }
     
@@ -625,8 +632,12 @@ sub get_source_param {
     my $links = $param_fields->{job_prop}->{links};
     my %start_stages_for_source= %{get_start_stages_for_mapping($param_fields->{job_prop}->{start_lines})};
     my $stage_name = get_stage_name_from_link($links, $link,\%start_stages_for_source);
+    
+    my %table_comp=();
+    my $link_name = $link;
+    if (defined $stage_name){
     say '$stage_name: ' . $stage_name;
-
+    say '$stage_name:  успешно найден для $link: '.$link ;
 # return $stage_name;
 
     my $stage_body = get_stage($links, $stage_name);
@@ -638,11 +649,11 @@ sub get_source_param {
     say '$stage_name: ' . $stage_name;
     my $xml_fields = parse_xml_properties($xml_prop);
 
-    my $link_name = $link;
+    
 
     #получаем схему и имя таблицы
     #или путь и имя файла или датасета
-    my %table_comp = get_table_ds_file_name(
+    %table_comp = get_table_ds_file_name(
         $stage_body, $stage_name, $param_fields,
         $link_name,  $xml_prop,   $xml_fields
     );
@@ -661,6 +672,10 @@ sub get_source_param {
     #3.ПРИЕМНИК ДАННЫХ или сервер
     my $server = get_server_name($xml_fields, \%table_comp);    #
 
+}else{
+    say '$stage_name:  не найден для $link: '.$link ;
+    }
+
     #4.schema
     my $schema = $table_comp{schema};
 
@@ -676,10 +691,10 @@ sub get_source_param {
 
     #6.fields
     # my $fields = get_source_sql_field($sql_fields, 'Name');
-    my $stage_lines = $param_fields->{job_prop}->{lines}->{$stage_name};
+    # my $stage_lines = $param_fields->{job_prop}->{lines}->{$stage_name};
 
     my $fields_properties =
-      get_properties_sql_field($sql_fields, $stage_lines, $link_name,
+      get_properties_sql_field_src($sql_fields,$link_name,
         $param_fields, $stage_name);    #, 'Name' );
 
 #=cut
