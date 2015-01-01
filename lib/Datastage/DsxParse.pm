@@ -477,11 +477,14 @@ sub get_properties_sql_field {
 
 
 sub get_properties_sql_field_src {
-    my ($sql_fields, $link_name, $param_fields, $stage_name,) =
+    my ($sql_fields, $link_name, $param_fields, $stage_name,$field) =
       @_;
+      say "\$field sql_src: ".$field;
+      my $orig_field=get_field($field);
     my @sql_user_fiendly = ();
+            my %field_collect = ();
     for my $sql_field (@{$sql_fields}) {
-        my %field_collect = ();
+        if ($orig_field eq $sql_field->{Name}){
         $field_collect{Name} = $sql_field->{Name};
         $field_collect{Type} =
           decode_sql_type($sql_field->{SqlType}, $sql_field->{Precision});
@@ -494,9 +497,10 @@ sub get_properties_sql_field_src {
         $field_collect{SourceColumn} = $sql_field->{SourceColumn};
         $field_collect{Description} =
           from_dsx_2_utf($sql_field->{Description});
-        push @sql_user_fiendly, \%field_collect;
+      }
+        # push @sql_user_fiendly, \%field_collect;
     }
-    return \@sql_user_fiendly;
+    return \%field_collect;#\@sql_user_fiendly;
 }
 
 sub show_src_caption {
@@ -552,22 +556,55 @@ sub get_full_source_center {
     push @aggregate_parsed_constraint, $curr_source->{parsed_constraint};
 
 
+my %deriv_collect=();
+my @deriv_collect=();
     my ($src_link, $src_field, $fields, $link, $field);
   EMPTY_LINK: for my $stage_link (@{$joined_links}) {
         if (defined $curr_source->{name}) {
+            
             $link  = $curr_source->{src_link};
             $field = $curr_source->{name};
-            ($src_link, $src_field) = get_link_field($curr_source->{name});
-            $fields = get_fields($param_fields, $src_link, $src_field);
-            $curr_source = add_to_src($fields, $param_fields);
-            if (!defined $curr_source->{name}) {
-                last EMPTY_LINK;
-            }
+            #итак, наступило время разбираться с тем, если источником будет 2 и более полей
+            my $source_col=$field;
+            my ($cnt,          $src_fields) = is_multiple_source($source_col);
+             my ($parse_and_source, $pars_deriv);
+             
+    if ($cnt > 1) {        
+              my ($parse_and_source, $pars_deriv, $source_col) =
+          calc_deriv($param_fields, $field);
+        while (defined $source_col) {
+            push @deriv_collect, $parse_and_source;
+            ($parse_and_source, $pars_deriv, $source_col) =
+              calc_deriv($param_fields, $source_col);
+        }
+        
+        # $deriv_collect{$field} = \@deriv_collect;
+        # my @out = ();
+        # for my $field (@{$src_fields}) {
+            # my @loc_param = ();
+            # ($parse_and_source, $pars_deriv, $source_col) =
+              # calc_deriv_single($param_fields, $field);
+            # @loc_param = ($parse_and_source, $pars_deriv, $source_col);
+            # push @temporary, \@loc_param;
+
+        # # push @sql_user_fiendly, from_dsx_2_utf( $sql_field->{$field_name} );
+        # }
+        # return (\@out, $pars_deriv, $source_col);
+    }else{
             push @source_columns, $curr_source;
             push @aggregate_parsed_derivation,
               collect_aggegate_parsed_derivation($curr_source);
             push @aggregate_parsed_constraint,
               $curr_source->{parsed_constraint};
+              
+            ($src_link, $src_field) = get_link_field($curr_source->{name});
+            $fields = get_fields($param_fields, $src_link, $src_field);
+            $curr_source = add_to_src($fields, $param_fields);
+        }
+            if (!defined $curr_source->{name}) {
+                last EMPTY_LINK;
+            }
+            
         }
     }
     my $delimiter = "\n";
@@ -577,13 +614,14 @@ sub get_full_source_center {
       @aggregate_parsed_constraint;
     my $src_param;
     if (defined $link) {
-        my $src_param = get_source_param($param_fields, $link);
+        my $src_param = get_source_param($param_fields, $link,$field);
     }
     my %aggregate_hash = (
         link                        => $link,
         field                       => $field,
         aggregate_parsed_derivation => $aggregate_parsed_derivation,
         aggregate_parsed_constraint => $aggregate_parsed_constraint,
+        deriv_collect =>  \@deriv_collect,
     );
     my %full_source = (
         source_columns   => \@source_columns,
@@ -628,7 +666,7 @@ my %start=%{$start_stages_for_source};
 }
 
 sub get_source_param {
-    my ($param_fields, $link) = @_;
+    my ($param_fields, $link,$field) = @_;
     my $links = $param_fields->{job_prop}->{links};
     my %start_stages_for_source= %{get_start_stages_for_mapping($param_fields->{job_prop}->{start_lines})};
     my $stage_name = get_stage_name_from_link($links, $link,\%start_stages_for_source);
@@ -658,17 +696,6 @@ sub get_source_param {
         $link_name,  $xml_prop,   $xml_fields
     );
 
-#итак собираем excel
-#
-# ServerName "SDBDS2"
-# ToolInstanceID "MASTER_for_CDB"
-#1.project
-# my $header_flds = $param_fields->{job_prop}->{header_fields};
-# my $project = $header_flds->{ServerName} . '/' . $header_flds->{ToolInstanceID};
-
-#2. Job - есть!!!
-# my $job = get_job_name($param_fields->{job_prop}->{rich_records},    'CJobDefn', 'Name');
-
     #3.ПРИЕМНИК ДАННЫХ или сервер
     my $server = get_server_name($xml_fields, \%table_comp);    #
 
@@ -695,7 +722,7 @@ sub get_source_param {
 
     my $fields_properties =
       get_properties_sql_field_src($sql_fields,$link_name,
-        $param_fields, $stage_name);    #, 'Name' );
+        $param_fields, $stage_name,$field);    #, 'Name' );
 
 #=cut
     return $fields_properties;
