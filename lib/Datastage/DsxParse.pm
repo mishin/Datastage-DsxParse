@@ -565,6 +565,9 @@ sub get_full_source_center {
 
 
     my ($src_link, $src_field, $fields, $link, $field);
+
+    my ($parse_and_source, $pars_deriv, $source_col) =
+      calc_deriv($param_fields, $field);
   EMPTY_LINK: for my $stage_link (@{$joined_links}) {
         if (defined $curr_source->{name}) {
 
@@ -573,25 +576,56 @@ sub get_full_source_center {
             $field = $curr_source->{name};
 
        #здесь просто разбиваем L106.SCAB на L106 и SCAB
-            ($src_link, $src_field) = get_link_field($curr_source->{name});
-            $fields = get_fields($param_fields, $src_link, $src_field);
-            $curr_source = add_to_src($fields, $param_fields);
+            my ($cnt, $src_fields) = is_multiple_source($field);
+            my ($parse_and_source, $pars_deriv);
 
 
-            if (!defined $curr_source->{name}) {
-                last EMPTY_LINK;
+            if ($cnt > 1) {
+                my @out = ();
+                for my $field (@{$src_fields}) {
+                    my @loc_param = ();
+                    ($parse_and_source, $pars_deriv, $source_col) =
+                      calc_deriv_single($param_fields, $field);
+                    @loc_param =
+                      ($parse_and_source, $pars_deriv, $source_col);
+                    push @out, \@loc_param;
+					
+			   my $in_link = Tree::DAG_Node->new;
+                $in_link->name($curr_source->{name});
+                $curr_link->add_daughter($in_link);
+
+                $curr_link = $in_link;
+
+        # push @sql_user_fiendly, from_dsx_2_utf( $sql_field->{$field_name} );
+                }
+                # return (\@out, $pars_deriv, $source_col);
             }
+            else {
 
-            my $in_link = Tree::DAG_Node->new;
-            $in_link->name($curr_source->{name});
-            $curr_link->add_daughter($in_link);
 
-			$curr_link=$in_link;
-            push @source_columns, $curr_source;
-            push @aggregate_parsed_derivation,
-              collect_aggegate_parsed_derivation($curr_source);
-            push @aggregate_parsed_constraint,
-              $curr_source->{parsed_constraint};
+                ($src_link, $src_field) =
+                  get_link_field($curr_source->{name});
+                $fields = get_fields($param_fields, $src_link, $src_field);
+                $curr_source = add_to_src($fields, $param_fields);
+
+
+                if (!defined $curr_source->{name}) {
+                    last EMPTY_LINK;
+                }
+
+                my $in_link = Tree::DAG_Node->new;
+                $in_link->name($curr_source->{name});
+                $curr_link->add_daughter($in_link);
+
+                $curr_link = $in_link;
+
+
+                push @source_columns, $curr_source;
+                push @aggregate_parsed_derivation,
+                  collect_aggegate_parsed_derivation($curr_source);
+                push @aggregate_parsed_constraint,
+                  $curr_source->{parsed_constraint};
+            }
         }
     }
     say q{draw_ascii_tree};
@@ -618,6 +652,7 @@ sub get_full_source_center {
         aggregate_values => \%aggregate_hash,
 
         # src_param        => $src_param
+        src_param => $head_of_field
     );
 
     # print '$full_source: ' . (Dumper \%full_source);
