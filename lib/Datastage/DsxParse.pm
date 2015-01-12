@@ -545,12 +545,11 @@ sub get_full_source_center {
     my $head_of_field = Tree::DAG_Node->new;
     $head_of_field->name($link_name . '.' . $sql_field->{Name});
 
-
+    my %exists_field                = ();
     my @source_columns              = ();
     my @aggregate_parsed_derivation = ();
     my @aggregate_parsed_constraint = ();
-    my $curr_source =
-      add_to_src($sql_field, $param_fields, $parsed_constraint);
+    my $curr_source =   add_to_src($sql_field, $param_fields, $parsed_constraint);
 
 
     my $curr_link = Tree::DAG_Node->new;
@@ -559,15 +558,14 @@ sub get_full_source_center {
 
     push @source_columns, $curr_source;
 
-    push @aggregate_parsed_derivation,
-      collect_aggegate_parsed_derivation($curr_source);
+    push @aggregate_parsed_derivation,  collect_aggegate_parsed_derivation($curr_source);
     push @aggregate_parsed_constraint, $curr_source->{parsed_constraint};
 
 
     my ($src_link, $src_field, $fields, $link, $field);
 
-    my ($parse_and_source, $pars_deriv, $source_col) =
-      calc_deriv($param_fields, $field);
+    my ($parse_and_source, $pars_deriv, $source_col) =   calc_deriv($param_fields, $field);
+	  
   EMPTY_LINK: for my $stage_link (@{$joined_links}) {
         if (defined $curr_source->{name}) {
 
@@ -581,24 +579,17 @@ sub get_full_source_center {
 
 
             if ($cnt > 1) {
-                my @out = ();
                 for my $field (@{$src_fields}) {
-                    my @loc_param = ();
-                    ($parse_and_source, $pars_deriv, $source_col) =
-                      calc_deriv_single($param_fields, $field);
-                    @loc_param =
-                      ($parse_and_source, $pars_deriv, $source_col);
-                    push @out, \@loc_param;
-					
-			   my $in_link = Tree::DAG_Node->new;
-                $in_link->name($curr_source->{name});
-                $curr_link->add_daughter($in_link);
 
-                $curr_link = $in_link;
+                    if ($exists_field{$source_col} < 1) {
+                        my $in_link = Tree::DAG_Node->new;
+                        $in_link->name($source_col);
+                        $curr_link->add_daughter($in_link);
+                        $exists_field{$source_col}++;
+                    }
 
-        # push @sql_user_fiendly, from_dsx_2_utf( $sql_field->{$field_name} );
                 }
-                # return (\@out, $pars_deriv, $source_col);
+
             }
             else {
 
@@ -638,7 +629,6 @@ sub get_full_source_center {
       @aggregate_parsed_constraint;
     my $src_param;
     if (defined $link) {
-
         # my $src_param = get_source_param($param_fields, $link);
     }
     my %aggregate_hash = (
