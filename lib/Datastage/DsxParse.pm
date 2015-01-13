@@ -559,12 +559,6 @@ sub get_tree_init {
     return ($curr_link, $head_of_field);
 }
 
-sub get_intermediate_tree {
-    my ($curr_source) = @_;
-    my $in_link = Tree::DAG_Node->new;
-    $in_link->name($curr_source->{name});
-    return $in_link;
-}
 
 sub draw_ascii_tree {
     my ($head_of_field) = @_;
@@ -576,6 +570,14 @@ sub add_src {
     my ($param_fields, $curr_source) = @_;
     return add_to_src(get_fields($param_fields, $curr_source), $param_fields);
 }
+
+sub get_intermediate_tree {
+    my ($curr_source) = @_;
+    my $in_link = Tree::DAG_Node->new;
+    $in_link->name($curr_source->{name});
+    return $in_link;
+}
+
 
 sub make_tree_iterate_by_links {
     my ($joined_links, $curr_source, $curr_link, $param_fields, $sources) =
