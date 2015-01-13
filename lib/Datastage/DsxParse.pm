@@ -582,15 +582,17 @@ sub make_tree_iterate_by_links {
       @_;
 
   EMPTY_LINK: for my $stage_link (@{$joined_links}) {
-        $curr_source = add_src($param_fields, $curr_source);		
-        last EMPTY_LINK if not defined $curr_source->{name};
-
-        my $in_link = get_intermediate_tree($curr_source);
-        $curr_link->add_daughter($in_link);
-        $curr_link = $in_link;
-        $sources = add_2_parsed_sources($curr_source, $sources);
+        $curr_source = add_src($param_fields, $curr_source);
+        if (defined $curr_source->{name}) {
+            my $in_link = get_intermediate_tree($curr_source);
+            $curr_link->add_daughter($in_link);
+            $curr_link = $in_link;
+            $sources = add_2_parsed_sources($curr_source, $sources);
+        }
+        else {
+            last EMPTY_LINK;
+        }
     }
-
     return ($curr_link, $sources);
 }
 
