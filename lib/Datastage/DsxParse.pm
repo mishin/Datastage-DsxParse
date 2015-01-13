@@ -513,6 +513,10 @@ sub show_src_caption {
 
 sub add_to_src {
     my ($sql_field, $param_fields, $parsed_constraint) = @_;
+
+
+    # my $sql_field      = get_fields($param_fields, $curr_source);
+    # $curr_source = add_to_src($fields, $param_fields);
     my $src_col   = $sql_field->{SourceColumn};
     my %src_field = ();
     if (defined $src_col) {
@@ -598,9 +602,7 @@ sub make_tree_iterate_by_links {
       @_;
     my ($fields, $link, $field);
   EMPTY_LINK: for my $stage_link (@{$joined_links}) {
-        $link        = $curr_source->{src_link};
-        $field       = $curr_source->{name};
-        $fields      = get_fields($param_fields, $curr_source);
+        $fields = get_fields($param_fields, $curr_source);
         $curr_source = add_to_src($fields, $param_fields);
         if (!defined $curr_source->{name}) {
             last EMPTY_LINK;
@@ -610,34 +612,86 @@ sub make_tree_iterate_by_links {
         $curr_link = $in_link;
         $sources = add_2_parsed_sources($curr_source, $sources);
     }
-    return ($curr_link, $link, $field, $sources);
+
+
+    return ($curr_link, $sources);
+}
+
+
+sub make_tree_by_derivations {
+    my ($joined_links, $curr_source, $curr_link,
+        $param_fields, $sources,     $parsed_deriv
+    ) = @_;
+
+
+    say 'We_are_15_41 $parsed_deriv: ' . $parsed_deriv;
+    my $in_link = get_parsed_deriv_tree($parsed_deriv);
+    $curr_link->add_daughter($in_link);
+    $curr_link = $in_link;
+    $sources = add_2_parsed_sources($curr_source, $sources);
+    return ($curr_link, $sources);
+}
+
+sub get_parsed_deriv_tree {
+    my ($parsed_deriv) = @_;
+    my $in_link = Tree::DAG_Node->new;
+    $in_link->name($parsed_deriv);
+    $in_link->attributes({type => 'CONST'});
+    return $in_link;
 }
 
 sub get_full_source_center {
     my ($joined_links, $param_fields, $sql_field, $stage_name,
-        $parsed_constraint, $link_name)
+        $parsed_constraint, $link_name, $parsed_deriv)
       = @_;
     my $curr_source =
       add_to_src($sql_field, $param_fields, $parsed_constraint);
-    my ($curr_link, $head_of_field) =
-      get_tree_init($link_name, $sql_field, $curr_source);
+
     my $sources = add_2_parsed_arrays($curr_source);
 
-    my ($src_link, $src_field, $fields, $link, $field);
+    my ($curr_link, $head_of_field);
+
     if (defined $curr_source->{name}) {
-        my ($curr_link, $link, $field, $sources) = make_tree_iterate_by_links(
+        ($curr_link, $head_of_field) =
+          get_tree_init($link_name, $sql_field, $curr_source);
+        ($curr_link, $sources) = make_tree_iterate_by_links(
             $joined_links, $curr_source, $curr_link,
             $param_fields, $sources
         );
     }
-    draw_ascii_tree($head_of_field);
+    else {
+        ($curr_link, $head_of_field) =
+          get_parsed_tree_init($link_name, $sql_field, $parsed_deriv);
 
-    my $full_source = make_full_src($link, $field, $sources);
+#если источника поля нет,как для T199:UPD.PPN_DT
+#то это константа с формулой из   ParsedDerivation "CurrentDate()"
+#и тогда делаем эту формулу дочерью
+        # ($curr_link, $sources) = make_tree_by_derivations(
+        # $joined_links, $curr_source, $curr_link,
+        # $param_fields, $sources,     $parsed_deriv
+        # );
+    }
+    draw_ascii_tree($head_of_field);
+    my $full_source = make_full_src($curr_source, $sources);
     return $full_source;
 }
 
+sub get_parsed_tree_init {
+    my ($link_name, $sql_field, $parsed_deriv) = @_;
+    my $head_of_field = Tree::DAG_Node->new;
+    $head_of_field->name($link_name . '.' . $sql_field->{Name});
+
+    my $curr_link = Tree::DAG_Node->new;
+    $curr_link->name($parsed_deriv);
+    $head_of_field->add_daughter($curr_link);
+    return ($curr_link, $head_of_field);
+}
+
 sub make_full_src {
-    my ($link, $field, $sources) = @_;
+    my ($curr_source, $sources) = @_;
+
+    my $link           = $curr_source->{src_link};
+    my $field          = $curr_source->{name};
     my %aggregate_hash = (
         link    => $link,
         field   => $field,
@@ -758,6 +812,7 @@ sub get_full_source {
     my ($tree_of_source, $unic_links);
     say 'get_full_source for $sql_field->{Name}: ' . $sql_field->{Name};
     show_src_caption($sql_field);
+    my $parsed_deriv = from_dsx_2_utf($sql_field->{ParsedDerivation});
 
 #нужно накапливать историю преобразований!
 #нужен просто цикл по всем линкам, если они есть
@@ -770,7 +825,7 @@ sub get_full_source {
     $unic_links = make_uniq_links(\@collect);
     $tree_of_source =
       get_full_source_center($unic_links, $param_fields, $sql_field,
-        $stage_name, $parsed_constraint, $link_name);
+        $stage_name, $parsed_constraint, $link_name, $parsed_deriv);
 
     #my @tree=
 #    for my $elem (@{$tree_of_source}){
