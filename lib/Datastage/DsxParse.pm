@@ -511,31 +511,6 @@ sub show_src_caption {
     );
 }
 
-sub add_to_src {
-    my ($sql_field, $param_fields, $parsed_constraint) = @_;
-
-
-    # my $sql_field      = get_fields($param_fields, $curr_source);
-    # $curr_source = add_to_src($fields, $param_fields);
-    my $src_col   = $sql_field->{SourceColumn};
-    my %src_field = ();
-    if (defined $src_col) {
-        if (!defined $parsed_constraint) {
-            $parsed_constraint =
-              get_parsed_constraint($src_col, $param_fields);
-        }
-        my ($src_link, $src_field) = get_link_field($src_col);
-        %src_field = (
-            name      => $src_col,
-            src_link  => $src_link,
-            src_field => $src_field,
-            parsed_derivation =>
-              from_dsx_2_utf($sql_field->{ParsedDerivation}),
-            parsed_constraint => $parsed_constraint,
-        );
-    }
-    return \%src_field;
-}
 
 sub get_link_field {
     my $src_col = shift;
@@ -597,24 +572,52 @@ sub draw_ascii_tree {
     print map "$_\n", @{$head_of_field->draw_ascii_tree};
 }
 
+sub add_src {
+    my ($param_fields, $curr_source) = @_;
+    return add_to_src(get_fields($param_fields, $curr_source), $param_fields);
+}
+
 sub make_tree_iterate_by_links {
     my ($joined_links, $curr_source, $curr_link, $param_fields, $sources) =
       @_;
-    my ($fields, $link, $field);
+
   EMPTY_LINK: for my $stage_link (@{$joined_links}) {
-        $fields = get_fields($param_fields, $curr_source);
-        $curr_source = add_to_src($fields, $param_fields);
-        if (!defined $curr_source->{name}) {
-            last EMPTY_LINK;
-        }
+        $curr_source = add_src($param_fields, $curr_source);		
+        last EMPTY_LINK if not defined $curr_source->{name};
+
         my $in_link = get_intermediate_tree($curr_source);
         $curr_link->add_daughter($in_link);
         $curr_link = $in_link;
         $sources = add_2_parsed_sources($curr_source, $sources);
     }
 
-
     return ($curr_link, $sources);
+}
+
+
+sub add_to_src {
+    my ($sql_field, $param_fields, $parsed_constraint) = @_;
+
+    # my $sql_field      = get_fields($param_fields, $curr_source);
+    # $curr_source = add_to_src($fields, $param_fields);
+    my $src_col   = $sql_field->{SourceColumn};
+    my %src_field = ();
+    if (defined $src_col) {
+        if (!defined $parsed_constraint) {
+            $parsed_constraint =
+              get_parsed_constraint($src_col, $param_fields);
+        }
+        my ($src_link, $src_field) = get_link_field($src_col);
+        %src_field = (
+            name      => $src_col,
+            src_link  => $src_link,
+            src_field => $src_field,
+            parsed_derivation =>
+              from_dsx_2_utf($sql_field->{ParsedDerivation}),
+            parsed_constraint => $parsed_constraint,
+        );
+    }
+    return \%src_field;
 }
 
 
