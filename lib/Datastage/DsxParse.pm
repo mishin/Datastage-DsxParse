@@ -538,114 +538,112 @@ sub get_link_field {
     return (get_link($src_col), get_field($src_col));
 }
 
-sub get_full_source_center {
-    my ($joined_links, $param_fields, $sql_field, $stage_name,
-        $parsed_constraint, $link_name)
-      = @_;
+sub add_2_parsed_sources {
+    my ($curr_source, $sources) = @_;
+
+    push @{$sources->{source_columns}}, $curr_source;
+
+    push @{$sources->{aggregate_parsed_derivation}},
+      collect_aggegate_parsed_derivation($curr_source);
+    push @{$sources->{aggregate_parsed_constraint}},
+      $curr_source->{parsed_constraint};
+    return $sources;
+}
+
+sub add_2_parsed_arrays {
+    my ($curr_source) = @_;
+    my (@source_columns, @aggregate_parsed_derivation,
+        @aggregate_parsed_constraint)
+      = ();
+    push @source_columns, $curr_source;
+
+    push @aggregate_parsed_derivation,
+      collect_aggegate_parsed_derivation($curr_source);
+    push @aggregate_parsed_constraint, $curr_source->{parsed_constraint};
+    my $sources = {
+        source_columns              => \@source_columns,
+        aggregate_parsed_derivation => \@aggregate_parsed_derivation,
+        aggregate_parsed_constraint => \@aggregate_parsed_constraint,
+    };
+    return $sources;
+}
+
+
+sub get_tree_init {
+    my ($link_name, $sql_field, $curr_source) = @_;
     my $head_of_field = Tree::DAG_Node->new;
     $head_of_field->name($link_name . '.' . $sql_field->{Name});
-
-    my %exists_field                = ();
-    my @source_columns              = ();
-    my @aggregate_parsed_derivation = ();
-    my @aggregate_parsed_constraint = ();
-    my $curr_source =   add_to_src($sql_field, $param_fields, $parsed_constraint);
-
 
     my $curr_link = Tree::DAG_Node->new;
     $curr_link->name($curr_source->{name});
     $head_of_field->add_daughter($curr_link);
+    return ($curr_link, $head_of_field);
+}
 
-    push @source_columns, $curr_source;
+sub get_intermediate_tree {
+    my ($curr_source) = @_;
+    my $in_link = Tree::DAG_Node->new;
+    $in_link->name($curr_source->{name});
+    return $in_link;
+}
 
-    push @aggregate_parsed_derivation,  collect_aggegate_parsed_derivation($curr_source);
-    push @aggregate_parsed_constraint, $curr_source->{parsed_constraint};
-
-
-    my ($src_link, $src_field, $fields, $link, $field);
-
-    my ($parse_and_source, $pars_deriv, $source_col) =   calc_deriv($param_fields, $field);
-	  
-  EMPTY_LINK: for my $stage_link (@{$joined_links}) {
-        if (defined $curr_source->{name}) {
-
-
-            $link  = $curr_source->{src_link};
-            $field = $curr_source->{name};
-
-       #здесь просто разбиваем L106.SCAB на L106 и SCAB
-            my ($cnt, $src_fields) = is_multiple_source($field);
-            my ($parse_and_source, $pars_deriv);
-
-
-            if ($cnt > 1) {
-                for my $field (@{$src_fields}) {
-
-                    if ($exists_field{$source_col} < 1) {
-                        my $in_link = Tree::DAG_Node->new;
-                        $in_link->name($source_col);
-                        $curr_link->add_daughter($in_link);
-                        $exists_field{$source_col}++;
-                    }
-
-                }
-
-            }
-            else {
-
-
-                ($src_link, $src_field) =
-                  get_link_field($curr_source->{name});
-                $fields = get_fields($param_fields, $src_link, $src_field);
-                $curr_source = add_to_src($fields, $param_fields);
-
-
-                if (!defined $curr_source->{name}) {
-                    last EMPTY_LINK;
-                }
-
-                my $in_link = Tree::DAG_Node->new;
-                $in_link->name($curr_source->{name});
-                $curr_link->add_daughter($in_link);
-
-                $curr_link = $in_link;
-
-
-                push @source_columns, $curr_source;
-                push @aggregate_parsed_derivation,
-                  collect_aggegate_parsed_derivation($curr_source);
-                push @aggregate_parsed_constraint,
-                  $curr_source->{parsed_constraint};
-            }
-        }
-    }
+sub draw_ascii_tree {
+    my ($head_of_field) = @_;
     say q{draw_ascii_tree};
     print map "$_\n", @{$head_of_field->draw_ascii_tree};
+}
 
-    my $delimiter = "\n";
-    my $aggregate_parsed_derivation = join "\n", grep defined,
-      @aggregate_parsed_derivation;
-    my $aggregate_parsed_constraint = join "\n", grep defined,
-      @aggregate_parsed_constraint;
-    my $src_param;
-    if (defined $link) {
-        # my $src_param = get_source_param($param_fields, $link);
+sub make_tree_iterate_by_links {
+    my ($joined_links, $curr_source, $curr_link, $param_fields, $sources) =
+      @_;
+    my ($fields, $link, $field);
+  EMPTY_LINK: for my $stage_link (@{$joined_links}) {
+        $link        = $curr_source->{src_link};
+        $field       = $curr_source->{name};
+        $fields      = get_fields($param_fields, $curr_source);
+        $curr_source = add_to_src($fields, $param_fields);
+        if (!defined $curr_source->{name}) {
+            last EMPTY_LINK;
+        }
+        my $in_link = get_intermediate_tree($curr_source);
+        $curr_link->add_daughter($in_link);
+        $curr_link = $in_link;
+        $sources = add_2_parsed_sources($curr_source, $sources);
     }
+    return ($curr_link, $link, $field, $sources);
+}
+
+sub get_full_source_center {
+    my ($joined_links, $param_fields, $sql_field, $stage_name,
+        $parsed_constraint, $link_name)
+      = @_;
+    my $curr_source =
+      add_to_src($sql_field, $param_fields, $parsed_constraint);
+    my ($curr_link, $head_of_field) =
+      get_tree_init($link_name, $sql_field, $curr_source);
+    my $sources = add_2_parsed_arrays($curr_source);
+
+    my ($src_link, $src_field, $fields, $link, $field);
+    if (defined $curr_source->{name}) {
+        my ($curr_link, $link, $field, $sources) = make_tree_iterate_by_links(
+            $joined_links, $curr_source, $curr_link,
+            $param_fields, $sources
+        );
+    }
+    draw_ascii_tree($head_of_field);
+
+    my $full_source = make_full_src($link, $field, $sources);
+    return $full_source;
+}
+
+sub make_full_src {
+    my ($link, $field, $sources) = @_;
     my %aggregate_hash = (
-        link                        => $link,
-        field                       => $field,
-        aggregate_parsed_derivation => $aggregate_parsed_derivation,
-        aggregate_parsed_constraint => $aggregate_parsed_constraint,
+        link    => $link,
+        field   => $field,
+        sources => $sources,
     );
-    my %full_source = (
-        source_columns   => \@source_columns,
-        aggregate_values => \%aggregate_hash,
-
-        # src_param        => $src_param
-        src_param => $head_of_field
-    );
-
-    # print '$full_source: ' . (Dumper \%full_source);
+    my %full_source = (aggregate_values => \%aggregate_hash,);
 
     return (\%full_source);
 }
@@ -833,7 +831,10 @@ sub join_link {
 
 # debug(1, $stage_lines);
 sub get_fields {
-    my ($param_fields, $orig_link, $orig_fld) = @_;
+    my ($param_fields, $curr_source) = @_;
+
+    #здесь просто разбиваем L106.SCAB на L106 и SCAB
+    my ($orig_link, $orig_fld) = get_link_field($curr_source->{name});
     my $link_body =
       get_body_of_records($param_fields, $orig_link, 'CTrxOutput');
     my $fields = get_parsed_any($orig_fld, $link_body);
