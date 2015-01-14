@@ -18,7 +18,7 @@ use Tree::DAG_Node;
 
 # use Data::Dumper::Simple;
 #для отладки
-#use Devel::ebug;
+our $Debug=1;
 our $VERSION = "0.01";
 use Sub::Exporter -setup => {
     exports => [
@@ -548,6 +548,8 @@ sub add_src {
     return add_to_src(get_fields($param_fields, $curr_source), $param_fields);
 }
 
+
+
 sub make_tree_iterate_by_links {
     my ($joined_links, $curr_source, $curr_link, $param_fields, $sources) =
       @_;
@@ -564,14 +566,37 @@ sub make_tree_iterate_by_links {
     return ($curr_link, $sources);
 }
 
-sub add_childs {
-    my ($curr_link, $field,$param_fields, $curr_source,$param_fields) = @_;
+sub add_others_childs {
+    my ($curr_link, $field,$param_fields, $curr_source,$sources) = @_;
 	$curr_source = add_src($param_fields, $curr_source);
 	       # ($curr_link, $sources) =     make_tree($curr_source, $sources, $curr_link);
         
 
     return $curr_link;
 }
+
+
+sub add_src_2 {
+    my ($param_fields, $field) = @_;
+    say 'add_src_2 $field: '.$field if $Debug;
+    my $sql_fields=get_fields_2($param_fields, $field);
+    say '$sql_fields: '.Dumper($sql_fields);
+    return add_to_src($sql_fields, $param_fields);
+}
+
+sub get_fields_2 {
+    my ($param_fields, $field) = @_;
+    #здесь просто разбиваем L106.SCAB на L106 и SCAB
+    
+    my ($orig_link, $orig_fld) = get_link_field($field);
+    
+    
+    my $link_body =     get_body_of_records($param_fields, $orig_link, 'CTrxOutput');
+    say 'get_fields_2: $link_body: '.Dumper ($link_body);
+    my $fields = get_parsed_any($orig_fld, $link_body);
+    return $fields;
+}
+
 
 sub make_tree {
     my ($curr_source, $sources, $curr_link,$param_fields) = @_;
@@ -588,7 +613,14 @@ sub make_tree {
         for my $field (@{$src_fields}) {
             my $in_link = get_intermediate_tree_multiple($field);
             $curr_link->add_daughter($in_link);
-            # $curr_link = add_others_childs($curr_link, $field,$param_fields, $curr_source);
+            #Нужно получить есть ли source у $field?
+        $curr_source = add_src_2($param_fields, $field);
+            say 'test: $curr_sourced: '.Dumper $curr_source;
+            my $test='test';
+            my $test_link = get_intermediate_tree_multiple($test);
+            $in_link->add_daughter($test_link);
+               # $curr_link = $in_link;
+           # $curr_link = add_others_childs($curr_link, $field,$param_fields, $curr_source,$sources);
             say '$cnt > 1: ' . $field;
         }
     }
