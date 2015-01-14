@@ -569,19 +569,9 @@ sub make_tree {
     my ( $cnt, $src_fields ) = is_multiple_source($source_col);
     my ( $parse_and_source, $pars_deriv );
     if ( $cnt > 1 ) {
-        my @out = ();
         for my $field ( @{$src_fields} ) {
             my $in_link = get_intermediate_tree_multiple($field);
             $curr_link->add_daughter($in_link);
-            $curr_link = $in_link;
-
-# $sources = add_2_parsed_sources_multiple( $curr_source, $field );
-# my @loc_param = ();
-# ( $parse_and_source, $pars_deriv, $source_col ) =         calc_deriv_single( $param_fields, $field );
-# @loc_param = ( $parse_and_source, $pars_deriv, $source_col );
-# push @out, \@loc_param;
-
-          # push @sql_user_fiendly, from_dsx_2_utf( $sql_field->{$field_name} );
         }
     }
     else {
