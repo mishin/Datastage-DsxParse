@@ -553,11 +553,13 @@ sub make_tree_iterate_by_links {
     my ( $joined_links, $curr_source, $curr_link, $param_fields, $sources ) =
       @_;
 
+# ( $curr_link, $sources ) =          make_tree( $curr_source, $sources, $curr_link );
+
   EMPTY_LINK: for my $stage_link ( @{$joined_links} ) {
-        $curr_source = add_src( $param_fields, $curr_source );
-        last EMPTY_LINK if not defined $curr_source->{name};
         ( $curr_link, $sources ) =
           make_tree( $curr_source, $sources, $curr_link );
+        $curr_source = add_src( $param_fields, $curr_source );
+        last EMPTY_LINK if not defined $curr_source->{name};
     }
 
     return ( $curr_link, $sources );
@@ -565,20 +567,31 @@ sub make_tree_iterate_by_links {
 
 sub make_tree {
     my ( $curr_source, $sources, $curr_link ) = @_;
-    my $source_col = $curr_source->{name};
-    my ( $cnt, $src_fields ) = is_multiple_source($source_col);
+    # say 'make_tree: ' . Dumper($curr_source);
+    # say 'make_tree $curr_link: ' . Dumper($curr_link);
+    say 'make_tree $curr_link->name: ' . $curr_link->name;
+    say 'make_tree $curr_source->{name}: ' . $curr_source->{name};
+
+    # my $source_col = $curr_source->{name};
+    my ( $cnt, $src_fields ) = is_multiple_source( $curr_source->{name} );
     my ( $parse_and_source, $pars_deriv );
     if ( $cnt > 1 ) {
         for my $field ( @{$src_fields} ) {
             my $in_link = get_intermediate_tree_multiple($field);
             $curr_link->add_daughter($in_link);
+            say '$cnt > 1: ' . $field;
         }
     }
     else {
-        my $in_link = get_intermediate_tree($curr_source);
-        $curr_link->add_daughter($in_link);
-        $curr_link = $in_link;
-        $sources = add_2_parsed_sources( $curr_source, $sources );
+        if ( $curr_link->name ne $curr_source->{name} ) {
+            say
+'имена матери и ребенка не равны, добавляем: $curr_link->name ne $curr_source->{name}: '
+              . "$curr_link->name ne $curr_source->{name}";
+            my $in_link = get_intermediate_tree($curr_source);
+            $curr_link->add_daughter($in_link);
+            $curr_link = $in_link;
+            $sources = add_2_parsed_sources( $curr_source, $sources );
+        }
     }
     return ( $curr_link, $sources );
 }
