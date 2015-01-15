@@ -598,6 +598,7 @@ sub draw_ascii_tree {
     # );
     # show_variable_only('traverse');
     # traverse($head_of_field);
+
 =pod	
     show_variable_only('walk_down');
     $head_of_field->walk_down(
@@ -1267,8 +1268,7 @@ sub show_variable {
 
 sub show_variable_only {
     my ($value) = @_;
-    my $name = $value;
-    show_variable($value, $name);
+    show_variable($value, $value);
 }
 
 sub debug_show_field_and_link {
