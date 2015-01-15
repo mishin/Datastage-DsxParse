@@ -18,7 +18,7 @@ use Tree::DAG_Node;
 
 # use Data::Dumper::Simple;
 #для отладки
-our $Debug=1;
+our $Debug   = 0;
 our $VERSION = "0.01";
 use Sub::Exporter -setup => {
     exports => [
@@ -358,8 +358,10 @@ sub get_body_of_stage {
     state $i= 1;
 
     dump_in_html($fields_properties,
-        'fields_properties_' . $stage_name . '_n_' . $i . '.html');
-    dump_in_html($links, 'links' . $stage_name . '_n_' . $i . '.html');
+        'fields_properties_' . $stage_name . '_n_' . $i . '.html')
+      if $Debug;
+    dump_in_html($links, 'links' . $stage_name . '_n_' . $i . '.html')
+      if $Debug;
     $i++;
 
     # debug(1, $fields_properties);
@@ -531,6 +533,8 @@ sub get_tree_init {
     my $head_of_field = Tree::DAG_Node->new;
     $head_of_field->name($link_name . '.' . $sql_field->{Name});
 
+    $head_of_field->attributes({type => 'CONST'});
+
     my $curr_link = Tree::DAG_Node->new;
     $curr_link->name($curr_source->{name});
     $head_of_field->add_daughter($curr_link);
@@ -541,13 +545,58 @@ sub draw_ascii_tree {
     my ($head_of_field) = @_;
     say q{draw_ascii_tree};
     print map "$_\n", @{$head_of_field->draw_ascii_tree};
+
+    # say '';
+    # print $head_of_field->dump_names;
+    # say '';
+    # $head_of_field->walk_down(
+    # {   callback => sub {
+    # my $node = shift;
+    # print "  " x $_[0]->{_depth};
+    # print "(*) "
+    # if $node->name eq $_[0]->{treename};
+    # print $node->name, "\n";
+    # },
+    # _depth   => 0,
+    # treename => 'PerlMonks'
+    # }
+    # );
+    say '';
+    traverse($head_of_field);
+    say '';
+    $head_of_field->walk_down(
+        {   callback => sub {
+                print $_[0]->name, " ", ref $_[0]->attributes, " ", "\n";
+                print $_[0]->name, " ", ref $_[0]->attributes, " ",
+                  $_[0]->attributes->{type}, "\n"
+                  if defined $_[0]->attributes->{type};
+                print $_[0]->name, " ", ref $_[0]->attributes, " ",
+                  $_[0]->attributes->{parsed_constraint}, "\n"
+                  if defined $_[0]->attributes->{parsed_constraint};
+
+                # $node->attributes->{budget};
+              }
+        }
+    );
+
+    # $in_link->attributes({type => 'CONST'});
+}
+
+sub traverse {
+    my $node = shift;
+    my $depth = scalar $node->ancestors || 0;
+
+    # a pre-order traversal. First we do something ...
+    print ".." x $depth, $node->name, " ", $node->address, "\n";
+
+    # ... and then we recurse the subodes
+    traverse($_) for $node->daughters;
 }
 
 sub add_src {
     my ($param_fields, $curr_source) = @_;
     return add_to_src(get_fields($param_fields, $curr_source), $param_fields);
 }
-
 
 
 sub make_tree_iterate_by_links {
@@ -557,7 +606,10 @@ sub make_tree_iterate_by_links {
 # ( $curr_link, $sources ) =          make_tree( $curr_source, $sources, $curr_link );
 
   EMPTY_LINK: for my $stage_link (@{$joined_links}) {
-        ($curr_link, $sources) =     make_tree($curr_source, $sources, $curr_link,$param_fields);
+        ($curr_link, $sources) = make_tree(
+            $curr_source,  $sources, $curr_link,
+            $param_fields, $joined_links
+        );
         $curr_source = add_src($param_fields, $curr_source);
         last EMPTY_LINK if not defined $curr_source->{name};
     }
@@ -566,10 +618,11 @@ sub make_tree_iterate_by_links {
 }
 
 sub add_others_childs {
-    my ($curr_link, $field,$param_fields, $curr_source,$sources) = @_;
-	$curr_source = add_src($param_fields, $curr_source);
-	       # ($curr_link, $sources) =     make_tree($curr_source, $sources, $curr_link);
-        
+    my ($curr_link, $field, $param_fields, $curr_source, $sources) = @_;
+    $curr_source = add_src($param_fields, $curr_source);
+
+ # ($curr_link, $sources) =     make_tree($curr_source, $sources, $curr_link);
+
 
     return $curr_link;
 }
@@ -577,22 +630,25 @@ sub add_others_childs {
 
 sub add_src_2 {
     my ($param_fields, $field) = @_;
-    say 'add_src_2 $field: '.$field if $Debug;
-    #dump_in_html($param_fields,        'param_fields_15_01_2015.html')  if $Debug;#пустой!!
+    say 'add_src_2 $field: ' . $field if $Debug;
+
+#dump_in_html($param_fields,        'param_fields_15_01_2015.html')  if $Debug;#пустой!!
 #    dump_in_html($field,        $field.'_field_15_01_2015.html')  if $Debug;
-    my $sql_fields=get_fields_2($param_fields, $field);
+    my $sql_fields = get_fields_2($param_fields, $field);
+
     #say '$sql_fields: '.Dumper($sql_fields);
     return add_to_src($sql_fields, $param_fields);
 }
 
 sub get_fields_2 {
     my ($param_fields, $field) = @_;
+
     #здесь просто разбиваем L106.SCAB на L106 и SCAB
-    
+
     my ($orig_link, $orig_fld) = get_link_field($field);
-    
-    
-    my $link_body =     get_body_of_records($param_fields, $orig_link, 'CTrxOutput');
+    my $link_body =
+      get_body_of_records($param_fields, $orig_link, 'CTrxOutput');
+
     #say 'get_fields_2: $link_body: '.Dumper ($link_body);
     my $fields = get_parsed_any($orig_fld, $link_body);
     return $fields;
@@ -600,38 +656,53 @@ sub get_fields_2 {
 
 
 sub make_tree {
-    my ($curr_source, $sources, $curr_link,$param_fields) = @_;
+    my ($curr_source, $sources, $curr_link, $param_fields, $joined_links) =
+      @_;
 
     # say 'make_tree: ' . Dumper($curr_source);
     # say 'make_tree $curr_link: ' . Dumper($curr_link);
-    say 'make_tree $curr_link->name: ' . $curr_link->name;
-    say 'make_tree $curr_source->{name}: ' . $curr_source->{name};
+    say 'make_tree $curr_link->name: ' . $curr_link->name if $Debug;
+    say 'make_tree $curr_source->{name}: ' . $curr_source->{name} if $Debug;
 
     # my $source_col = $curr_source->{name};
     my ($cnt, $src_fields) = is_multiple_source($curr_source->{name});
     my ($parse_and_source, $pars_deriv);
     if ($cnt > 1) {
         for my $field (@{$src_fields}) {
-            my $in_link = get_intermediate_tree_multiple($field);
+            my $in_link =
+              get_intermediate_tree_multiple($field, $param_fields);
             $curr_link->add_daughter($in_link);
+
             #Нужно получить есть ли source у $field?
-        $curr_source = add_src_2($param_fields, $field);
-     #       say 'test: $curr_sourced: '.Dumper $curr_source;
-     say 'дочери $field $curr_source->{name}: ' . $curr_source->{name};
+            $curr_source = add_src_2($param_fields, $field);
+
+            #       say 'test: $curr_sourced: '.Dumper $curr_source;
+            say 'дочери $field $curr_source->{name}: '
+              . $curr_source->{name}
+              if $Debug;
+
             #my $test='test';
-            my $test_link = get_intermediate_tree_multiple($curr_source->{name});
+            my $test_link =
+              get_intermediate_tree_multiple($curr_source->{name},
+                $param_fields);
             $in_link->add_daughter($test_link);
-               # $curr_link = $in_link;
-           # $curr_link = add_others_childs($curr_link, $field,$param_fields, $curr_source,$sources);
-            say '$cnt > 1: ' . $field;
+            ($in_link, $sources) = make_tree_iterate_by_links(
+                $joined_links, $curr_source, $in_link,
+                $param_fields, $sources
+            );
+
+# $curr_link = $in_link;
+# $curr_link = add_others_childs($curr_link, $field,$param_fields, $curr_source,$sources);
+            say '$cnt > 1: ' . $field if $Debug;
         }
     }
     else {
         if ($curr_link->name ne $curr_source->{name}) {
             say
               'имена матери и ребенка не равны, добавляем: $curr_link->name ne $curr_source->{name}: '
-              . "$curr_link->name ne $curr_source->{name}";
-            my $in_link = get_intermediate_tree($curr_source);
+              . "$curr_link->name ne $curr_source->{name}"
+              if $Debug;
+            my $in_link = get_intermediate_tree($curr_source, $param_fields);
             $curr_link->add_daughter($in_link);
             $curr_link = $in_link;
             $sources = add_2_parsed_sources($curr_source, $sources);
@@ -639,6 +710,59 @@ sub make_tree {
     }
     return ($curr_link, $sources);
 }
+
+
+sub make_tree_2 {
+    my ($curr_source, $sources, $curr_link, $param_fields) = @_;
+
+    # say 'make_tree: ' . Dumper($curr_source);
+    # say 'make_tree $curr_link: ' . Dumper($curr_link);
+    say 'make_tree $curr_link->name: ' . $curr_link->name if $Debug;
+    say 'make_tree $curr_source->{name}: ' . $curr_source->{name} if $Debug;
+
+    # my $source_col = $curr_source->{name};
+    my ($cnt, $src_fields) = is_multiple_source($curr_source->{name});
+    my ($parse_and_source, $pars_deriv);
+    if ($cnt > 1) {
+        for my $field (@{$src_fields}) {
+            my $in_link =
+              get_intermediate_tree_multiple($field, $param_fields);
+            $curr_link->add_daughter($in_link);
+
+            #Нужно получить есть ли source у $field?
+            $curr_source = add_src_2($param_fields, $field);
+
+            #       say 'test: $curr_sourced: '.Dumper $curr_source;
+            say 'дочери $field $curr_source->{name}: '
+              . $curr_source->{name}
+              if $Debug;
+
+            #my $test='test';
+            my $test_link =
+              get_intermediate_tree_multiple($curr_source->{name},
+                $param_fields);
+            $in_link->add_daughter($test_link);
+
+# $curr_link = $in_link;
+# $curr_link = add_others_childs($curr_link, $field,$param_fields, $curr_source,$sources);
+            say '$cnt > 1: ' . $field if $Debug;
+        }
+    }
+    else {
+        if ($curr_link->name ne $curr_source->{name}) {
+            say
+              'имена матери и ребенка не равны, добавляем: $curr_link->name ne $curr_source->{name}: '
+              . "$curr_link->name ne $curr_source->{name}"
+              if $Debug;
+            my $in_link = get_intermediate_tree($curr_source, $param_fields);
+            $curr_link->add_daughter($in_link);
+            $curr_link = $in_link;
+            $sources = add_2_parsed_sources($curr_source, $sources);
+        }
+    }
+    return ($curr_link, $sources);
+}
+
 
 sub add_2_parsed_sources_multiple {
     my ($curr_source, $sources) = @_;
@@ -663,17 +787,25 @@ sub add_2_parsed_sources {
 }
 
 sub get_intermediate_tree_multiple {
-    my ($field) = @_;
+    my ($field, $param_fields) = @_;
     my $in_link = Tree::DAG_Node->new;
     $in_link->name($field);
     return $in_link;
 }
 
+# my $parsed_constraint = get_parsed_constraint($field, $param_fields);
+# $in_link->attributes ({
+# parsed_constraint => $parsed_constraint
+# });
+
 sub get_intermediate_tree {
-    my ($curr_source) = @_;
-    my $in_link = Tree::DAG_Node->new;
-    $in_link->name($curr_source->{name});
-    return $in_link;
+    my ($curr_source, $param_fields) = @_;
+    return get_intermediate_tree_multiple($curr_source->{name},
+        $param_fields);
+
+    # my $in_link = Tree::DAG_Node->new;
+    # $in_link->name($curr_source->{name});
+    # return $in_link;
 }
 
 =pod
