@@ -570,6 +570,11 @@ sub get_tree_init {
 
     my $curr_link = Tree::DAG_Node->new;
     $curr_link->name($curr_source->{name});
+
+    #sql поля есть
+    my $curr_sql_fields = get_sql_fields($param_fields, $curr_source->{name});
+
+# $curr_link =      add_sql_attributes($curr_link, $curr_source->{name}, $param_fields,        $curr_sql_fields);
     $head_of_field->add_daughter($curr_link);
     return ($curr_link, $head_of_field);
 }
@@ -704,7 +709,8 @@ sub make_tree {
     # say 'make_tree: ' . Dumper($curr_source);
     # say 'make_tree $curr_link: ' . Dumper($curr_link);
     say 'make_tree $curr_link->name: ' . $curr_link->name if $Debug;
-    say 'make_tree $curr_source->{name}: ' . $curr_source->{name} if $Debug;
+    say 'make_tree $curr_source->{name}: ' . $curr_source->{name}
+      if $Debug;
 
     # my $source_col = $curr_source->{name};
     my ($cnt, $src_fields) = is_multiple_source($curr_source->{name});
@@ -760,7 +766,8 @@ sub make_tree_2 {
     # say 'make_tree: ' . Dumper($curr_source);
     # say 'make_tree $curr_link: ' . Dumper($curr_link);
     say 'make_tree $curr_link->name: ' . $curr_link->name if $Debug;
-    say 'make_tree $curr_source->{name}: ' . $curr_source->{name} if $Debug;
+    say 'make_tree $curr_source->{name}: ' . $curr_source->{name}
+      if $Debug;
 
     # my $source_col = $curr_source->{name};
     my ($cnt, $src_fields) = is_multiple_source($curr_source->{name});
@@ -1106,24 +1113,6 @@ sub get_full_source {
       get_full_source_center($unic_links, $param_fields, $sql_field,
         $stage_name, $parsed_constraint, $link_name, $parsed_deriv);
 
-    #my @tree=
-    #    for my $elem (@{$tree_of_source}){
-    #		say '$tree_of_source reftype: '.reftype $elem;
-    #		foreach my $el (keys %{$elem}) {
-    #            say 'key: '.$el;
-    #            say ' value: '.$elem->{$el} if defined $elem->{$el};
-    #        }
-    #		};
-    #my $last_record=$tree[$#tree];#$tree[-1];
-    #my %integrated_fields=(last_record=>$tree_of_source);
-    #my %ret_hash=(fields=>$tree_of_source,
-    #integrated_fields=>\%integrated_fields);
-    #my $last_element=${$tree_of_source}[-1];
-    #$array[-1]
-    #my %grouping_parameters=();
-    #$grouping_parameters{source_link}=$last_element->{src_link};
-
-    #%grouping_parameters;#
     return $tree_of_source;
 }
 
