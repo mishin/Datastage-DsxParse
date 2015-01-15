@@ -348,6 +348,15 @@ sub get_body_of_stage {
 
     #12.Ограничения для потока
     my $parsed_constraint = get_parsed_constraint($link_name, $param_fields);
+	
+	# say '12:36 link_name: '. $link_name;
+	
+	   # state $i= 1;
+
+    dump_in_html($link_name,        'link_name_' . $link_name . '_.html');#      if $Debug;
+    # dump_in_html($links, 'links' . $stage_name . '_n_' . $i . '.html')      if $Debug;
+    # $i++;
+	
 
     #6.1 fields
     my $fields_properties = get_properties_sql_field(
@@ -543,7 +552,8 @@ sub get_tree_init {
 
 sub draw_ascii_tree {
     my ($head_of_field) = @_;
-    say q{draw_ascii_tree};
+	show_variable('draw_ascii_tree');
+    # say q{draw_ascii_tree};
     print map "$_\n", @{$head_of_field->draw_ascii_tree};
 
     # say '';
@@ -790,6 +800,15 @@ sub get_intermediate_tree_multiple {
     my ($field, $param_fields) = @_;
     my $in_link = Tree::DAG_Node->new;
     $in_link->name($field);
+	#проверим, есть ли что в $param_fields?
+	 my $parsed_constraint = get_parsed_constraint($field, $param_fields);
+	    state $i= 1;
+# dump_in_html($parsed_constraint,'check_parsed_constraint_n_' . $i . '.html');#  if $Debug;;
+    
+    $i++;
+	 
+	   
+	 # dump_in_html($param_fields,'check_param_fields.html');
     return $in_link;
 }
 
