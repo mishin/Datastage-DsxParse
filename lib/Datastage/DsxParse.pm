@@ -557,8 +557,7 @@ sub make_tree_iterate_by_links {
 # ( $curr_link, $sources ) =          make_tree( $curr_source, $sources, $curr_link );
 
   EMPTY_LINK: for my $stage_link (@{$joined_links}) {
-        ($curr_link, $sources) =
-          make_tree($curr_source, $sources, $curr_link);
+        ($curr_link, $sources) =     make_tree($curr_source, $sources, $curr_link,$param_fields);
         $curr_source = add_src($param_fields, $curr_source);
         last EMPTY_LINK if not defined $curr_source->{name};
     }
@@ -579,8 +578,10 @@ sub add_others_childs {
 sub add_src_2 {
     my ($param_fields, $field) = @_;
     say 'add_src_2 $field: '.$field if $Debug;
+    #dump_in_html($param_fields,        'param_fields_15_01_2015.html')  if $Debug;#пустой!!
+#    dump_in_html($field,        $field.'_field_15_01_2015.html')  if $Debug;
     my $sql_fields=get_fields_2($param_fields, $field);
-    say '$sql_fields: '.Dumper($sql_fields);
+    #say '$sql_fields: '.Dumper($sql_fields);
     return add_to_src($sql_fields, $param_fields);
 }
 
@@ -592,7 +593,7 @@ sub get_fields_2 {
     
     
     my $link_body =     get_body_of_records($param_fields, $orig_link, 'CTrxOutput');
-    say 'get_fields_2: $link_body: '.Dumper ($link_body);
+    #say 'get_fields_2: $link_body: '.Dumper ($link_body);
     my $fields = get_parsed_any($orig_fld, $link_body);
     return $fields;
 }
@@ -615,9 +616,10 @@ sub make_tree {
             $curr_link->add_daughter($in_link);
             #Нужно получить есть ли source у $field?
         $curr_source = add_src_2($param_fields, $field);
-            say 'test: $curr_sourced: '.Dumper $curr_source;
-            my $test='test';
-            my $test_link = get_intermediate_tree_multiple($test);
+     #       say 'test: $curr_sourced: '.Dumper $curr_source;
+     say 'дочери $field $curr_source->{name}: ' . $curr_source->{name};
+            #my $test='test';
+            my $test_link = get_intermediate_tree_multiple($curr_source->{name});
             $in_link->add_daughter($test_link);
                # $curr_link = $in_link;
            # $curr_link = add_others_childs($curr_link, $field,$param_fields, $curr_source,$sources);
