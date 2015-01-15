@@ -348,15 +348,16 @@ sub get_body_of_stage {
 
     #12.Ограничения для потока
     my $parsed_constraint = get_parsed_constraint($link_name, $param_fields);
-	
-	# say '12:36 link_name: '. $link_name;
-	
-	   # state $i= 1;
 
-    dump_in_html($link_name,        'link_name_' . $link_name . '_.html');#      if $Debug;
-    # dump_in_html($links, 'links' . $stage_name . '_n_' . $i . '.html')      if $Debug;
-    # $i++;
-	
+    # say '12:36 link_name: '. $link_name;
+
+    # state $i= 1;
+
+# dump_in_html($link_name, 'link_name_' . $link_name . '_.html')      ;    #      if $Debug;
+
+# dump_in_html($links, 'links' . $stage_name . '_n_' . $i . '.html')      if $Debug;
+# $i++;
+
 
     #6.1 fields
     my $fields_properties = get_properties_sql_field(
@@ -537,12 +538,35 @@ sub add_2_parsed_arrays {
     return $sources;
 }
 
+sub add_sql_attributes {
+    my ($head_of_field, $link_name, $param_fields, $sql_field) = @_;
+    my $parsed_constraint = get_parsed_constraint($link_name, $param_fields)
+      // "";
+
+    my $parsed_deriv =
+      ($sql_field->{ParsedDerivation} ne $sql_field->{SourceColumn})
+      ? from_dsx_2_utf($sql_field->{ParsedDerivation})
+      : "";
+
+    $head_of_field->attributes(
+        {   ParsedDerivation  => $parsed_deriv,
+            SourceColumn      => $sql_field->{SourceColumn} // "",
+            Parsed_constraint => $parsed_constraint
+        }
+    );
+    return $head_of_field;
+}
+
 sub get_tree_init {
-    my ($link_name, $sql_field, $curr_source) = @_;
+    my ($link_name, $sql_field, $curr_source, $param_fields) = @_;
     my $head_of_field = Tree::DAG_Node->new;
     $head_of_field->name($link_name . '.' . $sql_field->{Name});
+    $head_of_field =
+      add_sql_attributes($head_of_field, $link_name, $param_fields,
+        $sql_field);
 
-    $head_of_field->attributes({type => 'CONST'});
+   # my $parsed_constraint = get_parsed_constraint($link_name, $param_fields);
+
 
     my $curr_link = Tree::DAG_Node->new;
     $curr_link->name($curr_source->{name});
@@ -552,7 +576,8 @@ sub get_tree_init {
 
 sub draw_ascii_tree {
     my ($head_of_field) = @_;
-	show_variable('draw_ascii_tree');
+    show_variable_only('draw_ascii_tree');
+
     # say q{draw_ascii_tree};
     print map "$_\n", @{$head_of_field->draw_ascii_tree};
 
@@ -571,9 +596,10 @@ sub draw_ascii_tree {
     # treename => 'PerlMonks'
     # }
     # );
-    say '';
-    traverse($head_of_field);
-    say '';
+    # show_variable_only('traverse');
+    # traverse($head_of_field);
+=pod	
+    show_variable_only('walk_down');
     $head_of_field->walk_down(
         {   callback => sub {
                 print $_[0]->name, " ", ref $_[0]->attributes, " ", "\n";
@@ -588,6 +614,11 @@ sub draw_ascii_tree {
               }
         }
     );
+=cut
+
+    show_variable_only('tree2string');
+    print map("$_\n", @{$head_of_field->tree2string})
+      if defined $head_of_field;
 
     # $in_link->attributes({type => 'CONST'});
 }
@@ -687,15 +718,15 @@ sub make_tree {
             $curr_source = add_src_2($param_fields, $field);
 
             #       say 'test: $curr_sourced: '.Dumper $curr_source;
-            say 'дочери $field $curr_source->{name}: '
-              . $curr_source->{name}
-              if $Debug;
+            # if (defined $curr_source->{name}){
+            # say 'дочери $field $curr_source->{name}: '
+            # . $curr_source->{name}
+            # if $Debug;
+# }
+#my $test='test';
+# my $test_link =            get_intermediate_tree_multiple($curr_source->{name},             $param_fields);
+# $in_link->add_daughter($test_link);
 
-            #my $test='test';
-            my $test_link =
-              get_intermediate_tree_multiple($curr_source->{name},
-                $param_fields);
-            $in_link->add_daughter($test_link);
             ($in_link, $sources) = make_tree_iterate_by_links(
                 $joined_links, $curr_source, $in_link,
                 $param_fields, $sources
@@ -800,15 +831,17 @@ sub get_intermediate_tree_multiple {
     my ($field, $param_fields) = @_;
     my $in_link = Tree::DAG_Node->new;
     $in_link->name($field);
-	#проверим, есть ли что в $param_fields?
-	 my $parsed_constraint = get_parsed_constraint($field, $param_fields);
-	    state $i= 1;
+
+    #проверим, есть ли что в $param_fields?
+    my $parsed_constraint = get_parsed_constraint($field, $param_fields);
+    state $i= 1;
+
 # dump_in_html($parsed_constraint,'check_parsed_constraint_n_' . $i . '.html');#  if $Debug;;
-    
+
     $i++;
-	 
-	   
-	 # dump_in_html($param_fields,'check_param_fields.html');
+
+
+    # dump_in_html($param_fields,'check_param_fields.html');
     return $in_link;
 }
 
@@ -900,7 +933,7 @@ sub get_full_source_center {
 
     if (defined $curr_source->{name}) {
         ($curr_link, $head_of_field) =
-          get_tree_init($link_name, $sql_field, $curr_source);
+          get_tree_init($link_name, $sql_field, $curr_source, $param_fields);
         ($curr_link, $sources) = make_tree_iterate_by_links(
             $joined_links, $curr_source, $curr_link,
             $param_fields, $sources
@@ -1230,6 +1263,12 @@ sub show_variable {
         say $string. '#';
         say '#' x $fixed_length;
     }
+}
+
+sub show_variable_only {
+    my ($value) = @_;
+    my $name = $value;
+    show_variable($value, $name);
 }
 
 sub debug_show_field_and_link {
